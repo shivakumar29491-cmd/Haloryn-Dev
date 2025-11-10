@@ -1,6 +1,6 @@
 {
   "name": "haloai",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
@@ -10,7 +10,8 @@
     "cheerio": "^1.1.2",
     "dotenv": "^16.4.5",
     "mic": "^2.1.2",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "pdf-parse": "^1.1.4"
   },
   "devDependencies": {
     "electron": "^30.0.0"

@@ -3,86 +3,93 @@
 <head>
   <meta charset="utf-8" />
   <title>HaloAI — Transcribe & Answer</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"/>
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
   <link rel="stylesheet" href="haloAI.css" />
 </head>
 <body>
-  <div class="window-chrome">
-    <div class="title">HaloAI — Transcribe & Answer</div>
-    <div class="win-buttons">
-      <button id="btn-min" title="Minimize">–</button>
-      <button id="btn-max" title="Maximize">□</button>
-      <button id="btn-close" title="Close">×</button>
+  <div class="app-surface">
+    <!-- Window chrome -->
+    <div class="window-chrome glass">
+      <div class="title">HaloAI — Transcribe & Answer</div>
+      <div class="win-buttons">
+        <button id="btn-min" title="Minimize">–</button>
+        <button id="btn-max" title="Maximize">□</button>
+        <button id="btn-close" title="Close">×</button>
+      </div>
     </div>
+
+    <!-- Tabs + live controls -->
+    <div class="tabs">
+      <button class="tab active" data-tab="live">Live</button>
+      <button class="tab" data-tab="pre">Pre-recorded</button>
+      <button class="tab" data-tab="logs">Logs</button>
+
+      <div class="live-controls">
+        <button id="startBtn" title="Start">▶</button>
+        <button id="stopBtn"  title="Stop">■</button>
+        <span id="liveState">idle</span>
+        <!-- inline fading status + companion toggle -->
+        <span id="liveStatus" class="fade-status hidden">Listening…</span>
+        <button id="companionToggle" class="ghost toggle" title="Live Companion">Companion</button>
+      </div>
+    </div>
+
+    <!-- Live -->
+    <section id="tab-live" class="panel show">
+      <div class="glass">
+
+        <!-- Chat feed (user/assistant bubbles). Keep if you want bubble history. -->
+        <div id="chatFeed" class="chat-feed"></div>
+
+        <!-- Transcript (rolling mic text) -->
+        <div class="qa-block glass" style="margin-top:10px;">
+          <div class="answer-header">
+            <label>Transcript</label>
+          </div>
+          <textarea id="liveTranscript" class="qa-textarea" spellcheck="false"></textarea>
+        </div>
+
+        <!-- Chat input row + attachments -->
+        <div class="chat-row">
+          <button id="fileBtn" title="Attach document">📎</button>
+          <input id="docInput" type="file" accept=".txt,.pdf" hidden />
+          <input id="chatInput" type="text" placeholder="Ask HaloAI… Press Enter" />
+          <button id="chatSend" title="Send">↪</button>
+        </div>
+        <div id="docBadge" class="doc-badge hidden"></div>
+
+        <!-- Answer -->
+        <div class="answer-box">
+          <label>Answer <a id="clearAnswer" href="javascript:void(0)">Clear</a></label>
+          <textarea id="liveAnswer" rows="8" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pre-recorded -->
+    <section id="tab-pre" class="panel">
+      <div class="glass">
+        <div class="row">
+          <button id="pickAudioBtn">Pick audio</button>
+          <button id="transcribeBtn">Transcribe</button>
+          <button id="clearBtn">Clear</button>
+          <span id="pickedPath"></span>
+        </div>
+        <textarea id="fileOutput" rows="12" spellcheck="false"></textarea>
+      </div>
+    </section>
+
+    <!-- Logs -->
+    <section id="tab-logs" class="panel">
+      <div class="glass">
+        <label>Logs</label>
+        <textarea id="liveLog" rows="20" spellcheck="false"></textarea>
+      </div>
+    </section>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" data-tab="live">Live</button>
-    <button class="tab" data-tab="pre">Pre-recorded</button>
-    <button class="tab" data-tab="logs">Logs</button>
-  </div>
-
-  <!-- LIVE -->
-  <section id="tab-live" class="panel show">
-    <div class="row card">
-      <div class="group">
-        <label for="soxDevice">Input device</label>
-        <select id="soxDevice" class="w-280"></select>
-        <button id="refreshDevices">Refresh</button>
-      </div>
-
-      <div class="group">
-        <label for="gainDb">Gain (dB)</label>
-        <input id="gainDb" type="number" value="0" class="w-90"/>
-      </div>
-
-      <div class="group">
-        <label for="chunkMs">Chunk (ms)</label>
-        <input id="chunkMs" type="number" value="5000" class="w-100"/>
-      </div>
-
-      <div class="group">
-        <label>Quick check</label>
-        <button id="testMic">Test Mic (3s)</button>
-      </div>
-    </div>
-
-    <div class="row controls">
-      <button id="startBtn" class="primary">Start</button>
-      <button id="stopBtn" class="ghost">Stop</button>
-      <span id="liveState" class="state">idle</span>
-    </div>
-
-    <div class="split">
-      <div class="col">
-        <label>Transcript</label>
-        <textarea id="liveTranscript" rows="12" spellcheck="false"></textarea>
-      </div>
-      <div class="col">
-        <label>Answer</label>
-        <textarea id="liveAnswer" rows="12" spellcheck="false"></textarea>
-      </div>
-    </div>
-  </section>
-
-  <!-- PRE-RECORDED -->
-  <section id="tab-pre" class="panel">
-    <div class="row card">
-      <button id="pickAudioBtn">Pick audio…</button>
-      <button id="transcribeBtn" class="primary">Transcribe</button>
-      <button id="clearBtn" class="ghost">Clear</button>
-      <span id="filePath" class="path">No file selected.</span>
-    </div>
-    <label>Output</label>
-    <textarea id="fileOutput" rows="14" spellcheck="false"></textarea>
-  </section>
-
-  <!-- LOGS -->
-  <section id="tab-logs" class="panel">
-    <label>Logs</label>
-    <textarea id="liveLog" rows="20" spellcheck="false"></textarea>
-  </section>
-
+  <script src="chatbox.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
