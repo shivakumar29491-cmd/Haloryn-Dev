@@ -157,3 +157,25 @@ button:hover{filter:brightness(1.1)}
   50% { box-shadow: 0 0 12px rgba(58,134,255,.55); }
   100% { box-shadow: 0 0 0 rgba(58,134,255,0); }
 }
+/* --- Companion slow pulse when ON --- */
+@keyframes halo-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255,165,0,0.00); transform: translateZ(0); }
+  50%  { box-shadow: 0 0 0 8px rgba(255,165,0,0.18); }
+  100% { box-shadow: 0 0 0 0 rgba(255,165,0,0.00); }
+}
+body.companion-on #companionToggle.pulsing {
+  animation: halo-pulse 1.8s ease-in-out infinite;
+}
+
+/* --- Recorder LED (orange) while listening --- */
+@keyframes halo-led {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,140,0,0.3), 0 0 12px rgba(255,140,0,0.55); }
+  50%     { box-shadow: 0 0 0 6px rgba(255,140,0,0.20), 0 0 18px rgba(255,140,0,0.75); }
+}
+button.recording,
+.recording {
+  border-color: #ffb14a;
+  background: rgba(255,165,0,0.16);
+  color: #ffdcb0;
+  animation: halo-led 1.6s ease-in-out infinite;
+}

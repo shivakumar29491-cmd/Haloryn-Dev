@@ -26,11 +26,7 @@
       <button class="tab" data-tab="logs">Logs</button>
 
       <div class="live-controls">
-        <button id="startBtn" title="Start">▶</button>
-        <button id="stopBtn"  title="Stop">■</button>
         <span id="liveState">idle</span>
-        <!-- inline fading status + companion toggle -->
-        <span id="liveStatus" class="fade-status hidden">Listening…</span>
         <button id="companionToggle" class="ghost toggle" title="Live Companion">Companion</button>
       </div>
     </div>
@@ -39,15 +35,12 @@
     <section id="tab-live" class="panel show">
       <div class="glass">
 
-        <!-- Chat feed (user/assistant bubbles). Keep if you want bubble history. -->
-        <div id="chatFeed" class="chat-feed"></div>
-
-        <!-- Transcript (rolling mic text) -->
+        <!-- Transcript box (single source of truth) -->
         <div class="qa-block glass" style="margin-top:10px;">
           <div class="answer-header">
             <label>Transcript</label>
           </div>
-          <textarea id="liveTranscript" class="qa-textarea" spellcheck="false"></textarea>
+          <textarea id="liveTranscript" class="qa-textarea" rows="10" spellcheck="false"></textarea>
         </div>
 
         <!-- Chat input row + attachments -->

@@ -1,9 +1,8 @@
 class ChatBox {
-  constructor({ inputEl, sendBtn, answerArea, chatFeed, fileBtn, fileInput, badge }) {
+  constructor({ inputEl, sendBtn, answerArea, fileBtn, fileInput, badge }) {
     this.input     = inputEl;
     this.sendBtn   = sendBtn;
     this.answer    = answerArea;
-    this.chatFeed  = chatFeed;
     this.fileBtn   = fileBtn;
     this.fileInput = fileInput;
     this.badge     = badge;
@@ -75,12 +74,11 @@ class ChatBox {
   const inputEl = document.getElementById('chatInput');
   const sendBtn = document.getElementById('chatSend');
   const ans     = document.getElementById('liveAnswer');
-  const feed    = document.getElementById('chatFeed');
   const fileBtn = document.getElementById('fileBtn');
   const fileInp = document.getElementById('docInput');
   const badge   = document.getElementById('docBadge');
 
   if (inputEl && sendBtn) new ChatBox({
-    inputEl, sendBtn, answerArea: ans, chatFeed: feed, fileBtn, fileInput: fileInp, badge
+    inputEl, sendBtn, answerArea: ans, fileBtn, fileInput: fileInp, badge
   });
 })();

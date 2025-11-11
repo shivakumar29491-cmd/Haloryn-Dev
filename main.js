@@ -65,79 +65,43 @@ const LANG            = process.env.WHISPER_LANG || 'en';
 
 function runWhisper(filePath){
   return new Promise((resolve, reject) => {
-    try {
+    try{
       if (!fs.existsSync(filePath)) return reject(new Error('audio not found'));
+      const st = fs.statSync(filePath);
+      if (!st || st.size < 2000) { send('log','[whisper] skipped empty/small chunk'); return resolve(''); }
       const outTxt = `${filePath}.txt`;
       try { if (fs.existsSync(outTxt)) fs.unlinkSync(outTxt); } catch {}
 
       const args = [
-        '-m', WHISPER_MODEL,
-        '-f', filePath,
-        '-otxt',
-        '-l', LANG,
-        '-t', String(WHISPER_THREADS),
-        '-ngl', WHISPER_NGL
-      ];
-
-      send('log', `[spawn] ${WHISPER_BIN}\n[args] ${args.join(' ')}`);
-      const child = spawn(WHISPER_BIN, args, { windowsHide: true });
-
-      let lastPartial = '';
-
-      child.stdout.on('data', (buf) => {
-        const chunk = buf.toString();
-        // keep logging stdout so you can see raw whisper output
-        send('log', chunk);
-
-        // 1) timestamped format: [00:00:01.11 -> 00:00:03.22] text...
-        const timeStamped = chunk.match(/\[\d{2}:\d{2}:\d{2}\.\d{2}\s*->\s*\d{2}:\d{2}:\d{2}\.\d{2}\]\s*(.*)/);
-        if (timeStamped && timeStamped[1]) {
-          lastPartial = timeStamped[1].trim();
-          send('live:transcript', lastPartial);
-          return;
-        }
-
-        // 2) key:value format: text: ...
-        const keyVal = chunk.match(/(?:text|result)\s*:\s*(.+)/i);
-        if (keyVal && keyVal[1]) {
-          lastPartial = keyVal[1].trim();
-          send('live:transcript', lastPartial);
-          return;
-        }
-
-        // 3) fallback: printable words
-        const maybeWords = chunk.trim();
-        if (maybeWords && /[a-zA-Z0-9]/.test(maybeWords)) {
-          lastPartial = maybeWords;
-          send('live:transcript', lastPartial);
-        }
-      });
-
-      child.stderr.on('data', d => {
-        send('log', `[stderr] ${d.toString()}`);
-      });
-
-      child.on('error', (e) => {
-        send('log', `[whisper:error] ${e.message}`);
-        reject(e);
-      });
-
-      child.on('close', () => {
-        // flush last partial so UI shows what we heard
-        if (lastPartial) send('live:transcript', lastPartial);
-        try {
-          const text = fs.existsSync(outTxt) ? fs.readFileSync(outTxt, 'utf8').trim() : '';
-          resolve(text);
-        } catch (e) {
-          reject(e);
-        }
-      });
-    } catch (e) {
-      reject(e);
-    }
-  });
+  '-m', WHISPER_MODEL,
+  '-f', filePath,
+  '-otxt',
+  '-l', LANG,
+  '-t', String(WHISPER_THREADS)
+];
+if (Number(WHISPER_NGL) > 0) {
+  args.push('-ngl', String(WHISPER_NGL));
 }
 
+      send('log', `[spawn] ${WHISPER_BIN}\n[args] ${args.join(' ')}`);
+      const child = spawn(WHISPER_BIN, args, { windowsHide:true });
+      child.stdout.on('data', d => send('log', d.toString()));
+      let _stderr='';
+      child.stderr.on('data', d => { const s=d.toString(); _stderr+=s; send('log', `[stderr] ${s}`); });
+      child.on('close', () => {
+        try {
+          if (/\b(usage:|Voice Activity Detection|options:)\b/i.test(_stderr)) {
+            send('log','[whisper] usage/help detected — treating as empty');
+            return resolve('');
+          }
+          const text = fs.existsSync(outTxt) ? fs.readFileSync(outTxt, 'utf8').trim() : '';
+          resolve(text);
+        } catch(e){ reject(e); }
+      });
+      child.on('error', reject);
+    }catch(e){ reject(e); }
+  });
+}
 
 // ---------------- Web utils ----------------
 async function duckDuckGoSearch(query, maxResults = 5) {
@@ -450,14 +414,15 @@ function tmpWav(idx){ return path.join(tmpDir(), `chunk_${idx}.wav`); }
 function recordWithSox(outfile, ms, onDone, device = 'default', gainDb = '0'){
   const seconds = Math.max(1, Math.round(ms/1000));
   const devArg = (device && device !== 'default') ? device : 'default';
-  const args=[
-    '-q','-t','waveaudio', devArg,
-    '-r','16000','-b','16','-c','1',
-    outfile,
-    'trim','0',String(seconds),
-    'silence','1','0.1','1%','-1','0.5','1%',
-    'gain', String(gainDb || '0')
-  ];
+ const args = [
+  '-q','-t','waveaudio', devArg,
+  '-r','16000','-b','16','-c','1',
+  outfile,
+  // NEW (no silence; small gain)
+  'trim','0', String(seconds),
+  'gain', String(gainDb || '10')
+];
+
   send('log', `[sox] ${args.join(' ')}`);
   try{
     const child=spawn('sox',args,{windowsHide:true});
@@ -471,7 +436,7 @@ function recordWithSox(outfile, ms, onDone, device = 'default', gainDb = '0'){
 
 // ---------------- Live + Companion pipeline ----------------
 let live={on:false, idx:0, transcript:''};
-let recConfig={device:'default', gainDb:'0', chunkMs:1500};
+let recConfig={device:'default', gainDb:'0', chunkMs:1200};
 
 // Live Companion state
 const companion = {
@@ -556,7 +521,7 @@ function startChunk(){
       try{
         const text=(await runWhisper(outfile))||'';
         if(text){
-          live.transcript+=(live.transcript?' ':'')+text;
+          live.transcript+=(live.transcript?'\n':'')+text;
           send('live:transcript',live.transcript);
 
           // Only answer direct questions immediately; the companion handles summaries on a timer.
@@ -572,6 +537,27 @@ function startChunk(){
   recordWithSox(outfile,dMs,after, recConfig.device, recConfig.gainDb);
 }
 
+
+// Mirror handlers for Companion overlay API (used by preload.js)
+ipcMain.handle('companion:start', async()=>{
+  if(live.on){ send('companion:state','on'); return {ok:true}; }
+  live={on:true, idx:0, transcript:''};
+  companion.lastLen = 0;
+  companion.lastUpdateAt = 0;
+  startCompanionTimer();
+  startChunk();
+  send('companion:state','on');
+  send('live:answer', '🔊 Live Companion is ON. I’ll drop concise updates every ~12 seconds and a final recap when you stop.');
+  return {ok:true};
+});
+ipcMain.handle('companion:stop', async()=>{
+  if(!live.on){ send('companion:state','off'); return {ok:true}; }
+  live.on=false;
+  stopCompanionTimer();
+  await generateCompanionUpdate('final');
+  send('companion:state','off');
+  return {ok:true};
+});
 ipcMain.handle('live:start', async()=>{
   if(live.on) return {ok:true};
   live={on:true, idx:0, transcript:''};

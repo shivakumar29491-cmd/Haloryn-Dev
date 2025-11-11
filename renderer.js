@@ -15,7 +15,26 @@ function appendLog(line) {
 
 function setState(txt) {
   const el = $('#liveState');
-  if (el) el.textContent = txt;
+  if (el) {
+    el.textContent = txt;
+    // pulse class when starting/listening
+    const on = /listening|starting/i.test(String(txt || ''));
+    el.classList.toggle('pulsing', on);
+  }
+}
+
+// Drop “banner/status” lines from Answer/Companion sinks
+function isStatusyBanner(t) {
+  if (!t) return false;
+  const s = String(t);
+  return (
+    /^\s*🔊\s*Live Companion is ON/i.test(s) ||
+    /^\s*No material changes\./i.test(s) ||
+    /^\s*(Summary:|Action Items|From the web:)/i.test(s) ||
+    /\b(PDF support not installed|PDF load error|Web\+\s+(enabled|disabled))\b/i.test(s) ||
+    /^\s*Tip:\s+/i.test(s) ||
+    /^\s*Status:\s+/i.test(s)
+  );
 }
 
 // ------------------ Tabs ------------------
@@ -45,45 +64,63 @@ on($('#btn-close'), 'click', () => window.windowCtl?.close());
 const btnStart = pickFirst($('#startBtn'), $('[data-action="start"]'), $('[title="Start"]'));
 const btnStop  = pickFirst($('#stopBtn'),  $('[data-action="stop"]'),  $('[title="Stop"]'));
 
-const liveTranscript = $('#liveTranscript');
-const liveAnswer     = $('#liveAnswer');
+const liveTranscript = $('#liveTranscript') || document.querySelector('#tab-live textarea');
+const liveAnswer      = $('#liveAnswer');
 const liveStatus      = $('#liveStatus');
 const companionToggle = $('#companionToggle');
 const transcriptEl    = $('#liveTranscript');
 const answerEl        = $('#liveAnswer');   // existing
-const chatFeed        = $('#chatFeed');     // existing
+// NOTE: chat feed intentionally not used; we’re keeping Live ultra-clean
+
+// --- Single Transcript helpers ---
+let _txSeenLen = 0;
+let _txLastLine = '';
+
+function _ensureTrailingNewline(el){
+  if (el && !el.value.endsWith('\n')) el.value += '\n';
+}
+
+function appendTranscriptLine(line) {
+  if (!liveTranscript) return;
+  const s = String(line ?? '').trim();
+  if (!s || s === _txLastLine) return;     // de-dupe consecutive duplicates
+  _txLastLine = s;
+  liveTranscript.value += (liveTranscript.value ? '\n' : '') + s;
+  _ensureTrailingNewline(liveTranscript);
+  liveTranscript.scrollTop = liveTranscript.scrollHeight;
+}
+
+function appendTranscriptChunk(chunk){
+  // Split on newlines and append each cleanly
+  const parts = String(chunk || '').split(/\r?\n+/).map(p => p.trim()).filter(Boolean);
+  parts.forEach(p => appendTranscriptLine(`🎙 ${p}`));
+}
 
 function setTranscriptText(s) {
   if (liveTranscript) {
-    liveTranscript.value = s || '';
+    liveTranscript.value = (s || '');
+    _ensureTrailingNewline(liveTranscript);
     liveTranscript.scrollTop = liveTranscript.scrollHeight;
   }
-  // bubble fallback in chat feed
-  const feed = $('#chatFeed');
-  if (!feed) return;
-  let b = $('#live-bubble');
-  if (!b) {
-    b = document.createElement('div');
-    b.id = 'live-bubble';
-    b.className = 'bubble tx';
-    b.textContent = '🎙 Listening…';
-    feed.appendChild(b);
-  }
-  b.textContent = '🎙 ' + (s || '');
-  feed.scrollTop = feed.scrollHeight;
 }
 
+// Start/Stop
 on(btnStart, 'click', async () => {
   setState('starting…');
   try { await pushConfig(); } catch {}
   try {
     const r = await window.electron?.invoke('live:start');
     if (r?.ok) {
+      _txSeenLen = 0;
+      _txLastLine = '';
       setState('listening');
       setTranscriptText('Listening…');
     } else {
       setState('error');
     }
+    // Pulse + LED active
+    document.body.classList.add('companion-on');
+    btnStart?.classList.add('recording');
   } catch (e) {
     appendLog(`[ui] live:start error: ${e.message}`);
     setState('error');
@@ -93,25 +130,39 @@ on(btnStart, 'click', async () => {
 on(btnStop, 'click', async () => {
   try { await window.electron?.invoke('live:stop'); } catch {}
   setState('idle');
+  // Stop pulse + LED
+  document.body.classList.remove('companion-on');
+  btnStart?.classList.remove('recording');
 });
 
 // Backend → UI
 window.electron?.on('log', (t) => appendLog(t));
-window.electron?.on('live:transcript', (t) => setTranscriptText(String(t || '')));
-window.electron?.on('live:answer', (t) => {
-  const txt = String(t || '').trim();
-  if (!txt) return;
-  if (liveAnswer) {
-    liveAnswer.value = (liveAnswer.value ? liveAnswer.value + '\n---\n' : '') + txt;
-    liveAnswer.scrollTop = liveAnswer.scrollHeight;
+// Backend → UI (Transcript appends line-by-line)
+window.electron?.on('live:transcript', (t) => {
+  if (!liveTranscript) return;
+  const full = String(t || '');
+
+  const lines = full.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+
+  const existingText = (liveTranscript.value || '').trim();
+  const existing = existingText ? existingText.split(/\r?\n+/) : [];
+
+  const newLines = lines.slice(existing.length);
+  if (newLines.length) {
+    liveTranscript.value += (existingText ? '\n' : '') + newLines.join('\n');
+    liveTranscript.scrollTop = liveTranscript.scrollHeight;
   }
-  const feed = $('#chatFeed');
-  if (feed) {
-    const b = document.createElement('div');
-    b.className = 'bubble ai';
-    b.textContent = txt;
-    feed.appendChild(b);
-    feed.scrollTop = feed.scrollHeight;
+});
+
+window.electron?.on('live:answer', (t) => {
+  if (!t) return;
+  if (isStatusyBanner(t)) {
+    try { setState('listening'); } catch {}
+    return;
+  }
+  if (liveAnswer) {
+    liveAnswer.value = (liveAnswer.value ? liveAnswer.value + '\n---\n' : '') + t;
+    liveAnswer.scrollTop = liveAnswer.scrollHeight;
   }
 });
 
@@ -142,8 +193,8 @@ async function listDevices() {
 async function loadConfigToUI() {
   try {
     const cfg = await window.electron.invoke('rec:getConfig');
-    if (inpGain && cfg?.gainDb) inpGain.value = cfg.gainDb;
-    if (inpChunk && cfg?.chunkMs) inpChunk.value = String(cfg.chunkMs);
+    if (inpGain && cfg?.gainDb !== undefined) inpGain.value = cfg.gainDb;
+    if (inpChunk && cfg?.chunkMs !== undefined) inpChunk.value = String(cfg.chunkMs);
     if (selDevice && cfg?.device) selDevice.value = cfg.device;
   } catch {}
 }
@@ -167,10 +218,11 @@ on(btnTest, 'click', async () => {
   await pushConfig();
   appendLog('[test] recording 3s…');
   try {
-    const r = await window.electron.invoke('rec:test'); // optional in main.js; ignore if missing
+    const r = await window.electron.invoke('rec:test');
     if (r?.file) appendLog(`[test] file=${r.file} size=${r.size} bytes`);
     if (r?.transcript && liveTranscript) {
       liveTranscript.value = r.transcript;
+      _ensureTrailingNewline(liveTranscript);
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
   } catch {}
@@ -199,18 +251,19 @@ on(docBadge, 'click', async () => {
 on(chatSend, 'click', async () => {
   const val = chatInput?.value?.trim();
   if (!val) return;
+  appendTranscriptLine(`You: ${val}`);
   chatInput.value = '';
   try {
     const ans = await window.electron.invoke('chat:ask', val);
     if (ans && liveAnswer) {
-      liveAnswer.value = (liveAnswer.value ? liveAnswer.value + '\n---\n' : '') + ans;
-      liveAnswer.scrollTop = liveAnswer.scrollHeight;
+      if (!isStatusyBanner(ans)) {
+        liveAnswer.value = (liveAnswer.value ? liveAnswer.value + '\n---\n' : '') + ans;
+        liveAnswer.scrollTop = liveAnswer.scrollHeight;
+      }
     }
   } catch (e) { appendLog(`[ui] chat:ask error: ${e.message}`); }
 });
-on(chatInput, 'keydown', (e) => {
-  if (e.key === 'Enter') chatSend?.click();
-});
+on(chatInput, 'keydown', (e) => { if (e.key === 'Enter') chatSend?.click(); });
 on(fileBtn, 'click', () => docInput?.click());
 on(docInput, 'change', async () => {
   const f = docInput?.files?.[0];
@@ -231,9 +284,9 @@ on(docInput, 'change', async () => {
     if (docInput) docInput.value = '';
   }
 });
+
 // --- Live Companion UX wiring ---
 if (window.companion) {
-  // Start/stop via the dedicated toggle
   on(companionToggle, 'click', async () => {
     const isOn = companionToggle.classList.contains('active');
     try {
@@ -242,34 +295,33 @@ if (window.companion) {
     } catch (e) { appendLog(`[companion] toggle error: ${e.message}`); }
   });
 
-  // Reflect state in UI (fading status + pulsing toggle)
   window.companion.onState((s) => {
-    const on = s === 'on';
-    if (on) {
-      liveStatus?.classList.remove('hidden');
+    const onState = s === 'on';
+    if (onState) {
+      setState('listening');                          // show while ON
+      document.body.classList.add('companion-on');    // keep pulse styles active
       companionToggle?.classList.add('active','pulsing');
       companionToggle.textContent = 'Companion • ON';
     } else {
-      liveStatus?.classList.add('hidden');
+      setState('');                                   // <— CLEAR when OFF
+      document.body.classList.remove('companion-on'); // stop pulse styles
       companionToggle?.classList.remove('active','pulsing');
       companionToggle.textContent = 'Companion';
+      // if the textarea was showing a placeholder "Listening…", wipe it
+      if (liveTranscript && liveTranscript.value.trim() === 'Listening…') {
+        liveTranscript.value = '';
+      }
     }
   });
 
-  // Rolling mic transcript goes only to Transcript box
   window.companion.onTranscript((t) => {
     if (!transcriptEl) return;
-    transcriptEl.value += (t.endsWith('\n') ? t : (t + '\n'));
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    appendTranscriptChunk(String(t || ''));
   });
 
-  // Companion suggestions/answers go to Answer — filter noisy status banners
   window.companion.onSuggestion((s) => {
     const msg = (typeof s === 'string') ? s : (s?.message || '');
-    if (!msg) return;
-    // Drop the “Live Companion is ON…” banner from appearing as blocks
-    if (msg.startsWith('Live Companion is ON')) return;
-
+    if (!msg || isStatusyBanner(msg)) return;
     if (answerEl) {
       answerEl.value += (answerEl.value ? '\n' : '') + msg + '\n';
       answerEl.scrollTop = answerEl.scrollHeight;
@@ -306,5 +358,8 @@ on(clearBtn, 'click', () => { if (fileOutput) fileOutput.value = ''; });
   if (selDevice || inpGain || inpChunk) {
     await listDevices();
     await loadConfigToUI();
+  }
+  if (!liveTranscript) {
+    appendLog('[ui] WARNING: #liveTranscript not found in DOM');
   }
 })();
