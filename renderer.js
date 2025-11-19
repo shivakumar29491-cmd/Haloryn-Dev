@@ -52,6 +52,7 @@ function _appendTranscript(line, cls) {
     const div = document.createElement('div');
     div.className = cls || 'bubble me';
     div.textContent = s;
+    transcriptSink.style.height = "115px";
     transcriptSink.appendChild(div);
     transcriptSink.scrollTop = transcriptSink.scrollHeight;
   }

@@ -138,6 +138,11 @@ button:hover{filter:brightness(1.1)}
   border-radius:10px;padding:0 10px;backdrop-filter:blur(8px)
 }
 .chat-send{border-radius:10px}
+#liveTranscript {
+    line-height: 1.0 !important;     /* lowest clean spacing */
+    font-size: 11px !important;       /* smaller text */
+    padding: 4px 6px !important;      /* tighter top/bottom padding */
+}
 
 /* Answer box */
 .qa-textarea, textarea{
@@ -145,6 +150,31 @@ button:hover{filter:brightness(1.1)}
   border:1px solid var(--border);border-radius:14px;padding:10px;backdrop-filter:blur(10px)
 }
 .answer-header{display:flex;align-items:center;justify-content:space-between}
+/* TRANSCRIPT AREA — VERY SMALL */
+#liveTranscript {
+    height: 70px !important;        /* about 3–4 lines */
+    max-height: 70px !important;
+    min-height: 70px !important;
+
+    font-size: 12px !important;     /* smaller text */
+    line-height: 1.2;
+    overflow-y: auto;
+    resize: none;                   /* lock size */
+}
+
+/* ANSWER AREA — MUCH BIGGER */
+#answerBox {
+    height: calc(100% - 140px) !important;  /* occupies remaining space */
+    font-size: 14px !important;             /* slightly smaller text */
+    line-height: 1.3;
+    overflow-y: auto;
+    padding: 10px;
+}
+.answer-section {
+    height: calc(100% - 140px) !important;
+    font-size: 14px !important;
+}
+
 /* Answer log now uses a <div>, not a <textarea> */
 .answer-log {
   width: 100%;
