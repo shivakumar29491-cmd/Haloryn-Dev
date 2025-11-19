@@ -220,14 +220,78 @@ async function smartSearch(query, options = {}) {
     }
   }
 
+<<<<<<< HEAD
   return results || [];
+=======
+ const { rescoreSnippets } = require('./searchRouter'); // at top if needed
+
+// --- END OF PRIMARY SEARCH LOGIC ---
+
+if (!results || !results.length) return [];
+
+// Apply rescoring on final snippet set
+const rescored = rescoreSnippets(results, query, 4);
+return rescored;
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 }
 
 function getProviderStats() {
   return JSON.parse(JSON.stringify(stats));
 }
 
+<<<<<<< HEAD
 module.exports = {
   smartSearch,
   getProviderStats
+=======
+// =====================================================
+// SNIPPET RESCORING ENGINE (Phase 6.4)
+// =====================================================
+
+// Provider weights (tunable)
+const PROVIDER_WEIGHT = {
+  bing: 1.2,
+  serpapi: 1.1,
+  googlePSE: 1.0,
+  duckduckgo: 0.8
+};
+
+// Score one snippet
+function scoreSnippet(snippet, query, provider) {
+  const text = (snippet || '').toLowerCase();
+  const q = (query || '').toLowerCase();
+
+  // Keyword match
+  let keywordScore = 0;
+  const words = q.split(/\s+/);
+  for (const w of words) {
+    if (w.length > 3 && text.includes(w)) keywordScore++;
+  }
+
+  // Snippet length score
+  const lengthScore = Math.min((snippet || '').length / 80, 2);
+
+  // Provider trust
+  const providerScore = PROVIDER_WEIGHT[provider] || 1.0;
+
+  return (keywordScore + lengthScore) * providerScore;
+}
+
+// Top-N rescoring
+function rescoreSnippets(snippets, query, topN = 4) {
+  return snippets
+    .map(s => ({
+      ...s,
+      _score: scoreSnippet(s.snippet, query, s.provider)
+    }))
+    .sort((a, b) => b._score - a._score)
+    .slice(0, topN);
+}
+
+// Final exports
+module.exports = {
+  smartSearch,
+  getProviderStats,
+  rescoreSnippets
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 };

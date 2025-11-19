@@ -56,6 +56,32 @@ function _appendTranscript(line, cls) {
     transcriptSink.scrollTop = transcriptSink.scrollHeight;
   }
 }
+<<<<<<< HEAD
+=======
+// --- Answer log helper (Phase 6.3) ---
+function appendAnswerBlock(text) {
+  if (!liveAnswer) return;
+
+  const s = String(text || '').trim();
+  if (!s) return;
+
+  const block = document.createElement('div');
+  block.className = 'answer-block';
+  block.textContent = s;
+
+  const sep = document.createElement('div');
+  sep.className = 'answer-separator';
+  sep.textContent = '--- suggestion ended ---';
+
+  liveAnswer.appendChild(block);
+  liveAnswer.appendChild(sep);
+
+  // Auto-scroll to bottom
+  liveAnswer.scrollTop = liveAnswer.scrollHeight;
+   // tell main process so it can update pop-out + history
+  try { window.electron?.invoke('answer:push', s); } catch {}
+}
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 // De-dupe helper to avoid double lines (from IPC + companion overlap)
 let __lastLine = '';
@@ -287,6 +313,14 @@ const liveStatus      = $('#liveStatus');
 const companionToggle = $('#companionToggle');
 const transcriptEl    = $('#liveTranscript');
 const answerEl        = $('#liveAnswer');
+<<<<<<< HEAD
+=======
+const screenReadBtn = $('#screenReadBtn');
+const clearAnswer     = $('#clearAnswer');
+const popoutAnswer    = $('#popoutAnswer');
+
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 // --- Single Transcript helpers ---
 let _txSeenLen = 0;
@@ -318,6 +352,69 @@ function setTranscriptText(s) {
     liveTranscript.scrollTop = liveTranscript.scrollHeight;
   }
 }
+<<<<<<< HEAD
+=======
+on(screenReadBtn, 'click', async () => {
+  if (!window.electron?.invoke) return;
+
+  try {
+    setState('screen: capturing…');
+    const res = await window.electron.invoke('screen:readOnce');
+
+    if (!res || !res.ok) {
+      appendLog(`[screen] error: ${res && res.error ? res.error : 'unknown error'}`);
+      setState('error');
+      return;
+    }
+
+    const text = (res.text || '').trim();
+    if (!text) {
+      appendLog('[screen] no text detected by OCR');
+      setState('idle');
+      return;
+    }
+
+    // 1) Show OCR text inside the Transcript box
+    if (liveTranscript) {
+      const existing = (liveTranscript.value || '').trim();
+      const prefix = '[SCREEN OCR]\n';
+      liveTranscript.value = (existing ? existing + '\n\n' : '') + prefix + text;
+      liveTranscript.scrollTop = liveTranscript.scrollHeight;
+    }
+
+    // 2) Load OCR text as a temporary "document" for later questions
+    try {
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const name = `ScreenCapture-${ts}.txt`;
+      await window.electron.invoke('doc:ingestText', { name, text });
+    } catch (e) {
+      appendLog(`[screen] doc ingest error: ${e.message}`);
+    }
+
+    // 3) Ask the QA engine to summarize + suggest follow-up questions
+    try {
+      const prompt =
+        `Here is text captured from my screen:\n` +
+        `"""\n${text.slice(0, 4000)}\n"""\n\n` +
+        `1) Summarize it in clear bullet points.\n` +
+        `2) Suggest 3 helpful follow-up questions I could ask about this content.`;
+
+      const answer = await window.electron.invoke('chat:ask', prompt);
+if (answer && !isStatusyBanner(answer)) {
+  appendAnswerBlock(answer);
+}
+
+    } catch (e) {
+      appendLog(`[screen] QA error: ${e.message}`);
+    }
+
+    setState('idle');
+  } catch (err) {
+    appendLog(`[screen] unexpected error: ${err.message || err}`);
+    setState('error');
+  }
+});
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 // Start/Stop
 on(btnStart, 'click', async () => {
@@ -365,12 +462,19 @@ window.electron?.on('live:answer', (t) => {
     try { setState('listening'); } catch {}
     return;
   }
+<<<<<<< HEAD
   if (liveAnswer) {
     liveAnswer.value = (liveAnswer.value ? liveAnswer.value + '\n---\n' : '') + t;
     liveAnswer.scrollTop = liveAnswer.scrollHeight;
   }
 });
 
+=======
+  appendAnswerBlock(t);
+});
+
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 // ------------------ Config / Devices (optional UI) ------------------
 const selDevice  = $('#soxDevice');
 const inpGain    = $('#gainDb');
@@ -467,6 +571,7 @@ if (window.companion) {
   });
 
   window.companion.onSuggestion((s) => {
+<<<<<<< HEAD
     const msg = (typeof s === 'string') ? s : (s?.message || '');
     if (!msg || isStatusyBanner(msg)) return;
     if (answerEl) {
@@ -474,6 +579,13 @@ if (window.companion) {
       answerEl.scrollTop = answerEl.scrollHeight;
     }
   });
+=======
+  const msg = (typeof s === 'string') ? s : (s?.message || '');
+  if (!msg || isStatusyBanner(msg)) return;
+  appendAnswerBlock(msg);
+});
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 }
 
 // ------------------ Chat + Doc QA (file ingest + chat-to-answer) ------------------
@@ -499,6 +611,7 @@ on(docBadge, 'click', async () => {
 on(chatSend, 'click', async () => {
   const val = chatInput?.value?.trim();
   if (!val) return;
+<<<<<<< HEAD
   _appendDedup('You:', val, 'bubble user');
   chatInput.value = '';
   try {
@@ -511,6 +624,18 @@ on(chatSend, 'click', async () => {
     }
   } catch (e) { appendLog(`[ui] chat:ask error: ${e.message}`); }
 });
+=======
+  appendTranscriptLine(`You: ${val}`);
+  chatInput.value = '';
+  try {
+    const ans = await window.electron.invoke('chat:ask', val);
+    if (ans && !isStatusyBanner(ans)) {
+      appendAnswerBlock(ans);
+    }
+  } catch (e) { appendLog(`[ui] chat:ask error: ${e.message}`); }
+});
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 on(chatInput, 'keydown', (e) => { if (e.key === 'Enter') chatSend?.click(); });
 on(fileBtn, 'click', () => docInput?.click());
 on(docInput, 'change', async () => {
@@ -555,7 +680,22 @@ on(transcribeBtn, 'click', async () => {
   const r = await window.electron.invoke('whisper:transcribe', pickedPath);
   if (fileOutput) fileOutput.value += (r?.output || '') + '\n';
 });
+<<<<<<< HEAD
 on(clearBtn, 'click', () => { if (fileOutput) fileOutput.value = ''; });
+=======
+on(clearAnswer, 'click', () => {
+  if (liveAnswer) liveAnswer.innerHTML = '';
+  try { window.electron?.invoke('answer:clear'); } catch {}
+});
+on(popoutAnswer, 'click', async () => {
+  try {
+    await window.electron?.invoke('answerWindow:toggle');
+  } catch (e) {
+    appendLog(`[ui] answerWindow:toggle error: ${e.message}`);
+  }
+});
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 // ------------------ Init ------------------
 (async function init(){

@@ -14,8 +14,15 @@ const cheerio = require('cheerio');
 const { URL } = require('url');
 let pdfParse = null; // lazy-load for PDFs
 
+<<<<<<< HEAD
 const { smartSearch, getProviderStats } = require('./search/searchRouter');
 const { BraveApi }    = require('./search/engines/braveApi');
+=======
+
+const { smartSearch, getProviderStats } = require('./search/searchRouter');
+const { BraveApi }    = require('./search/engines/braveApi');
+const { initScreenReader } = require('./screenReader');
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 process.env.PATH = [
   'C:\\Program Files\\sox',
@@ -25,12 +32,62 @@ process.env.PATH = [
 
 // ---------------- Window ----------------
 let win;
+<<<<<<< HEAD
+=======
+let answerWin = null;
+let answerHistory = [];
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 function send(ch, payload) {
   if (win && !win.isDestroyed()) {
     try { win.webContents.send(ch, payload); } catch {}
   }
 }
 
+<<<<<<< HEAD
+=======
+function createWindow() {
+  win = new BrowserWindow({
+    width: 920,
+    height: 750,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    titleBarStyle: 'hidden',
+    backgroundMaterial: 'mica',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  win.loadFile('index.html').catch(e => console.error('[boot] loadFile error', e));
+  win.on('closed', () => { win = null; });
+}
+
+function createAnswerWindow() {
+  if (answerWin && !answerWin.isDestroyed()) return;
+
+  answerWin = new BrowserWindow({
+    width: 520,
+    height: 420,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    titleBarStyle: 'hidden',
+    backgroundMaterial: 'mica',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  answerWin.loadFile('answer.html').catch(e => console.error('[boot] answer load error', e));
+  answerWin.on('closed', () => { answerWin = null; });
+}
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 // --- Web search engines (Brave wrapper) ---
 let braveSearch = null;
 
@@ -939,6 +996,56 @@ ipcMain.handle('live:stop', async()=>{
   await generateCompanionUpdate('final');
   return {ok:true};
 });
+<<<<<<< HEAD
+=======
+// ... existing code above ...
+
+// Initialize Screen Reader (OCR) IPC
+initScreenReader({
+  ipcMain,
+  log: (msg) => send('log', msg)
+});
+
+// ---------------- Answer log / pop-out IPC ----------------
+ipcMain.handle('answerWindow:toggle', async () => {
+  if (answerWin && !answerWin.isDestroyed()) {
+    if (answerWin.isVisible()) {
+      answerWin.focus();
+    } else {
+      answerWin.show();
+    }
+  } else {
+    createAnswerWindow();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('answer:push', (_e, text) => {
+  const s = (text == null ? '' : String(text)).trim();
+  if (!s) return { ok: false };
+
+  answerHistory.push(s);
+
+  if (answerWin && !answerWin.isDestroyed()) {
+    try { answerWin.webContents.send('answer:new', s); } catch {}
+  }
+
+  return { ok: true, count: answerHistory.length };
+});
+
+ipcMain.handle('answer:getHistory', () => {
+  return { ok: true, items: answerHistory.slice() };
+});
+
+ipcMain.handle('answer:clear', () => {
+  answerHistory = [];
+  if (answerWin && !answerWin.isDestroyed()) {
+    try { answerWin.webContents.send('answer:clear'); } catch {}
+  }
+  return { ok: true };
+});
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 // ---------------- File mode ----------------
 ipcMain.handle('pick:audio', async()=>{

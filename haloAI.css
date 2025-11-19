@@ -2,6 +2,17 @@
   --bg:#0b1220; --panel:rgba(17,26,43,.35); --border:rgba(130,170,255,.20);
   --text:#dbe7ff; --muted:#9ab0d0; --accent:#3a86ff; --danger:#ff5d5d;
 }
+<<<<<<< HEAD
+=======
+html, body {
+  height: 100%;
+  overflow: hidden;   /* prevent outer scrollbars */
+}
+.popout-body {
+  margin: 0;
+  background: transparent;
+}
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 *{box-sizing:border-box}
 
@@ -137,6 +148,52 @@ button:hover{filter:brightness(1.1)}
   border:1px solid var(--border);border-radius:14px;padding:10px;backdrop-filter:blur(10px)
 }
 .answer-header{display:flex;align-items:center;justify-content:space-between}
+<<<<<<< HEAD
+=======
+/* Answer log now uses a <div>, not a <textarea> */
+.answer-log {
+  width: 100%;
+  min-height: 160px;
+
+  /* Bounded height so only Answer scrolls */
+  max-height: 260px;      /* adjust up/down if you want */
+  overflow-y: auto;       /* scroll INSIDE the answer box */
+  overflow-x: hidden;
+
+  background: rgba(15,24,48,.45);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px;
+  backdrop-filter: blur(10px);
+
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+}
+#clearAnswer {
+    color: #ffffff !important;
+    font-size: 18px;
+    margin-left: 8px;
+    cursor: pointer;
+    text-decoration: none;
+}
+#clearAnswer:hover {
+    opacity: 0.7;
+}
+
+
+/* Each individual answer block */
+.answer-block {
+  margin-bottom: 4px;
+}
+
+/* Separator after each suggestion */
+.answer-separator {
+  margin: 6px 0 10px;
+  font-size: 0.8rem;
+  opacity: 0.65;
+  text-align: center;
+}
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 
 /* Pre-recorded chip */
 .doc-chip{
@@ -152,11 +209,34 @@ button:hover{filter:brightness(1.1)}
   line-height:18px;cursor:pointer
 }
 #liveTranscript {
+<<<<<<< HEAD
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
+=======
+  /* Let transcript show multiple lines */
+  white-space: pre-wrap;
+
+  /* Allow scrolling through long sessions */
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* Don’t truncate with ellipsis */
+  text-overflow: initial;
+
+  /* Keep width constraints from layout */
+  max-width: 100%;
+  
+  /* Let you select/copy text while still being readonly */
+  user-select: text;
+}
+#liveTranscript {
+  cursor: text !important;
+}
+
+>>>>>>> b3cf0fa (Phase 6.4 complete)
 #live-bubble { opacity: .9; }
 
 /* Ensure only the title bar is draggable; all other buttons are clickable */
