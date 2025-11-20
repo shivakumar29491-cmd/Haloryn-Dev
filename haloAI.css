@@ -133,10 +133,7 @@ button:hover{filter:brightness(1.1)}
 .chatbox-row{
   display:grid;grid-template-columns:1fr auto;gap:8px
 }
-.chat-input{
-  height:36px;background:rgba(15,24,48,.5);border:1px solid var(--border);
-  border-radius:10px;padding:0 10px;backdrop-filter:blur(8px)
-}
+
 .chat-send{border-radius:10px}
 #liveTranscript {
     line-height: 1.0 !important;     /* lowest clean spacing */
@@ -392,3 +389,31 @@ button.recording,
   max-height: 120px;
   overflow-y: auto;
 }
+/* Force chat input to always receive keystrokes */
+/* Make chat input always on top */
+/* Fix chat input interaction properly */
+#chatInput {
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* Chat row must stay above transcript */
+.chat-row {
+  position: relative;
+  z-index: 9;
+}
+
+/* Transcript stays behind */
+#liveTranscript {
+  position: relative;
+  z-index: 1;
+}
+
+/* Answer block also behind */
+.qa-block {
+  position: relative;
+  z-index: 1;
+}
+
+

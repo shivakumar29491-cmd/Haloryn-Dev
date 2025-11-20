@@ -1,18 +1,26 @@
 // preload.js
-const { contextBridge, ipcRenderer } = require('electron');
+console.log("PRELOAD LOADED");
 
-contextBridge.exposeInMainWorld('electron', {
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("electron", {
   invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+
+  send: (channel, ...args) => ipcRenderer.send(channel, ...args),
+
   on: (channel, listener) => {
-    const wrapped = (_event, data) => listener(data);
+    const wrapped = (event, ...args) => listener(event, ...args);
     ipcRenderer.on(channel, wrapped);
     return () => ipcRenderer.removeListener(channel, wrapped);
   }
 });
 
+
+
 contextBridge.exposeInMainWorld('windowCtl', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
+  restore: () => ipcRenderer.invoke('window:restore'),
   close:    () => ipcRenderer.invoke('window:close')
 });
 

@@ -13,6 +13,16 @@ const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const { URL } = require('url');
 let pdfParse = null; // lazy-load for PDFs
+const sharp = require("sharp");
+const { desktopCapturer } = require("electron");
+const Tesseract = require("tesseract.js");
+const { triggerSnip } = require("./triggerSnip");
+const { clipboard } = require("electron");
+const { exec } = require("child_process");
+// --- Groq Fast Engines ---
+const { groqWhisperTranscribe, groqFastAnswer } = require("./groqEngine");
+
+
 
 
 const { smartSearch, getProviderStats } = require('./search/searchRouter');
@@ -986,11 +996,37 @@ ipcMain.handle('live:stop', async()=>{
   return {ok:true};
 });
 // ... existing code above ...
+// FAST transcription using Groq Whisper (Phase 7)
+ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
+  try {
+    const text = await groqWhisperTranscribe(audioBuffer);
+    return { ok: true, text };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+// FAST answering using Groq LLaMA (Phase 7)
+ipcMain.handle("groq:ask", async (_e, prompt) => {
+  try {
+    const ans = await groqFastAnswer(prompt);
+    return { ok: true, answer: ans };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 
 // Initialize Screen Reader (OCR) IPC
 initScreenReader({
   ipcMain,
   log: (msg) => send('log', msg)
+});
+ipcMain.on("ocr:image", async (event, imgBuffer) => {
+  try {
+    const { data: { text }} = await Tesseract.recognize(imgBuffer, "eng");
+    send("ocr:text", text);
+  } catch (err) {
+    send("ocr:text", "OCR Error: " + err.message);
+  }
 });
 
 // ---------------- Answer log / pop-out IPC ----------------
@@ -1146,11 +1182,39 @@ ipcMain.handle('search:stats', async () => {
     return { ok: false, error: e.message };
   }
 });
+ipcMain.handle("screenread:start", async () => {
+  try {
+    exec("explorer.exe ms-screenclip:");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle("screenread:getClipboardImage", async () => {
+  try {
+    const img = clipboard.readImage();
+
+    if (img.isEmpty()) {
+      return { ok: false, error: "No image in clipboard" };
+    }
+
+    const buffer = img.toPNG();
+    return { ok: true, img: buffer };
+
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
 
 // ---------------- Window controls / env ----------------
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
 ipcMain.handle('window:close', ()=>app.exit(0));
+ipcMain.handle('window:restore', () => {
+  if (win && win.isMinimized()) win.restore();
+});
 ipcMain.handle('env:get', ()=>({
   APP_NAME: process.env.APP_NAME || 'HaloAI',
   OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,

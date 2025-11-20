@@ -5,6 +5,7 @@ const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
 
 // Force textarea as the single transcript sink
 const transcriptSink = document.getElementById('liveTranscript');
+window.__useGroqFastMode = true;
 
 // --- Harden transcript as display-only (no typing/paste/drop) ---
 function hardenTranscript(el) {
@@ -59,7 +60,11 @@ function _appendTranscript(line, cls) {
 }
 // --- Answer log helper (Phase 6.3) ---
 function appendAnswerBlock(text) {
-  if (!liveAnswer) return;
+const liveAnswer = document.getElementById("liveAnswer");
+if (!liveAnswer) {
+    console.log("appendAnswerBlock: #liveAnswer not found");
+    return;
+}
 
   const s = String(text || '').trim();
   if (!s) return;
@@ -126,6 +131,17 @@ function renderApiUsagePanel(){
       </div>
     </div>
   `).join('');
+}
+//Grok Renderer
+async function fastAskGroq(prompt) {
+  const start = performance.now();
+  const res = await window.electron.invoke("groq:ask", prompt);
+  const ms = Math.round(performance.now() - start);
+
+  if (!res.ok) return `Groq Error: ${res.error}`;
+
+  appendLog(`GROQ answered in ${ms} ms`);
+  return res.answer;
 }
 
 // NEW: periodically pull provider stats from main.js (searchRouter.getProviderStats)
@@ -306,7 +322,7 @@ const btnStart = pickFirst($('#startBtn'), $('[data-action="start"]'), $('[title
 const btnStop  = pickFirst($('#stopBtn'),  $('[data-action="stop"]'),  $('[title="Stop"]'));
 
 const liveTranscript = $('#liveTranscript') || document.querySelector('#tab-live textarea');
-const liveAnswer      = $('#liveAnswer');
+//const liveAnswer      = $('#liveAnswer');
 const liveStatus      = $('#liveStatus');
 const companionToggle = $('#companionToggle');
 const transcriptEl    = $('#liveTranscript');
@@ -347,66 +363,98 @@ function setTranscriptText(s) {
     liveTranscript.scrollTop = liveTranscript.scrollHeight;
   }
 }
-on(screenReadBtn, 'click', async () => {
-  if (!window.electron?.invoke) return;
-
+//---------------------------------------------
+// SCREEN READ (Snipping Tool → Clipboard → OCR)
+//---------------------------------------------
+on(screenReadBtn, "click", async () => {
   try {
-    setState('screen: capturing…');
-    const res = await window.electron.invoke('screen:readOnce');
+    // UI: Button ON + status
+    screenReadBtn.classList.add("active");
+    setState("screen: capturing…");
 
-    if (!res || !res.ok) {
-      appendLog(`[screen] error: ${res && res.error ? res.error : 'unknown error'}`);
-      setState('error');
-      return;
+    // 1) Minimize HaloAI immediately
+    window.windowCtl?.minimize();
+
+    // 2) Launch Snipping Tool (handled in main.js)
+    await window.electron.invoke("screenread:start");
+
+    // 3) Poll clipboard for image placed by Snipping Tool
+    let tries = 0;
+    let found = false;
+
+    while (tries < 20) {
+      const res = await window.electron.invoke("screenread:getClipboardImage");
+
+      if (res.ok && res.img) {
+        window.electron.send("ocr:image", res.img);
+        found = true;
+        break;
+      }
+      await new Promise(r => setTimeout(r, 300));
+      tries++;
     }
 
-    const text = (res.text || '').trim();
+    if (!found) appendLog("[screen] no screenshot detected");
+
+  } catch (err) {
+    appendLog(`[screen] unexpected error: ${err.message}`);
+  } finally {
+    // Restore window right away after OCR (added later in OCR handler)
+    screenReadBtn.classList.remove("active");
+    setState("idle");
+  }
+});
+
+
+
+//--------------------------------------------------
+// HANDLE OCR TEXT RETURNED FROM main.js
+//--------------------------------------------------
+window.electron.on("ocr:text", async (event, textRaw) => {
+  try {
+    const text = (textRaw || "").trim();
+
     if (!text) {
-      appendLog('[screen] no text detected by OCR');
-      setState('idle');
+      appendLog("[screen] no text detected by OCR");
+      setState("idle");
       return;
     }
 
-    // 1) Show OCR text inside the Transcript box
+    // 1) Show OCR text in Transcript box
     if (liveTranscript) {
-      const existing = (liveTranscript.value || '').trim();
-      const prefix = '[SCREEN OCR]\n';
-      liveTranscript.value = (existing ? existing + '\n\n' : '') + prefix + text;
+      const existing = (liveTranscript.value || "").trim();
+      const prefix = "[SCREEN OCR]\n";
+      liveTranscript.value =
+        (existing ? existing + "\n\n" : "") + prefix + text;
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
-    // 2) Load OCR text as a temporary "document" for later questions
+    // 2) Ingest OCR text as a temporary document
     try {
-      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       const name = `ScreenCapture-${ts}.txt`;
-      await window.electron.invoke('doc:ingestText', { name, text });
+      await window.electron.invoke("doc:ingestText", { name, text });
     } catch (e) {
       appendLog(`[screen] doc ingest error: ${e.message}`);
     }
 
-    // 3) Ask the QA engine to summarize + suggest follow-up questions
-    try {
-      const prompt =
-        `Here is text captured from my screen:\n` +
-        `"""\n${text.slice(0, 4000)}\n"""\n\n` +
-        `1) Summarize it in clear bullet points.\n` +
-        `2) Suggest 3 helpful follow-up questions I could ask about this content.`;
-
-      const answer = await window.electron.invoke('chat:ask', prompt);
-if (answer && !isStatusyBanner(answer)) {
-  appendAnswerBlock(answer);
+    // 3) Ask QA engine to summarize + suggest follow-up questions
+  // 3) Store OCR text as screen-read context and answer normally
+try {
+  lastScreenReadContext = text;
+  await unifiedAsk(text);
+} catch (e) {
+  appendLog(`[screen] QA error: ${e.message}`);
+} finally {
+    window.windowCtl?.restore();
+    setState("idle");
 }
-
-    } catch (e) {
-      appendLog(`[screen] QA error: ${e.message}`);
-    }
-
-    setState('idle');
   } catch (err) {
-    appendLog(`[screen] unexpected error: ${err.message || err}`);
-    setState('error');
+    appendLog(`[screen] unexpected OCR error: ${err.message || err}`);
+    setState("error");
   }
 });
+
 
 // Start/Stop
 on(btnStart, 'click', async () => {
@@ -435,6 +483,26 @@ on(btnStop, 'click', async () => {
   setState('idle');
   document.body.classList.remove('companion-on');
   btnStart?.classList.remove('recording');
+});
+// ======================================================
+//   Companion / Live Mode Transcription Listener
+// ======================================================
+window.electron.on("live:chunk", (_e, text) => {
+  if (!text || !text.trim()) return;
+
+  appendTranscriptLine(text);
+
+  // When a clean sentence ends, send to Groq
+// Detect questions in speech (even without punctuation)
+const raw = text.trim();
+if (
+  raw.endsWith("?") ||
+  /^(what|why|how|who|when|where|is|are|can|should|does|do)\b/i.test(raw)
+) {
+  unifiedAsk(raw);
+}
+
+
 });
 
 // Backend → UI
@@ -562,10 +630,8 @@ if (window.companion) {
 }
 
 // ------------------ Chat + Doc QA (file ingest + chat-to-answer) ------------------
-const chatInput = $('#chatInput');
-const chatSend  = $('#chatSend');
 const fileBtn   = $('#fileBtn');
-const docInput  = $('#docInput');
+//const docInput  = $('#docInput');
 const docBadge  = $('#docBadge');
 
 function showDocBadge(name, count) {
@@ -581,20 +647,13 @@ on(docBadge, 'click', async () => {
   if (docBadge) docBadge.textContent = '';
 });
 
-on(chatSend, 'click', async () => {
-  const val = chatInput?.value?.trim();
-  if (!val) return;
-  appendTranscriptLine(`You: ${val}`);
-  chatInput.value = '';
-  try {
-    const ans = await window.electron.invoke('chat:ask', val);
-    if (ans && !isStatusyBanner(ans)) {
-      appendAnswerBlock(ans);
-    }
-  } catch (e) { appendLog(`[ui] chat:ask error: ${e.message}`); }
+on(chatInput, 'keydown', (e) => {
+  if (e.key === 'Enter') {
+    const val = chatInput.value.trim();
+    if (val) unifiedAsk(val);
+    chatInput.value = "";
+  }
 });
-
-on(chatInput, 'keydown', (e) => { if (e.key === 'Enter') chatSend?.click(); });
 on(fileBtn, 'click', () => docInput?.click());
 on(docInput, 'change', async () => {
   const f = docInput?.files?.[0];
@@ -637,6 +696,8 @@ on(transcribeBtn, 'click', async () => {
   }
   const r = await window.electron.invoke('whisper:transcribe', pickedPath);
   if (fileOutput) fileOutput.value += (r?.output || '') + '\n';
+    if (r?.output) unifiedAsk(r.output);
+
 });
 on(clearAnswer, 'click', () => {
   if (liveAnswer) liveAnswer.innerHTML = '';
@@ -668,3 +729,83 @@ on(popoutAnswer, 'click', async () => {
   refreshApiUsageFromBackend();
   setInterval(refreshApiUsageFromBackend, 10000);
 })();
+
+// --- Screen Read Context Memory ---
+let lastScreenReadContext = "";
+// =====================================================
+//   UNIVERSAL ANSWER PIPELINE (SAFE + NO RECURSION)
+// =====================================================
+async function unifiedAsk(promptText) {
+  try {
+    const userPrompt = String(promptText || "").trim();
+    if (!userPrompt) return;
+
+    // ---- Intent Detection ----
+    const lower = userPrompt.toLowerCase();
+    const explicitlySummary =
+      lower.startsWith("summarize") ||
+      lower.includes("summary") ||
+      lower.includes("tl;dr");
+
+    const explicitlyFollowup =
+      lower.includes("follow-up") ||
+      lower.includes("follow up") ||
+      lower.includes("next questions");
+
+    const isDirectQuestion =
+      /[?]$/.test(userPrompt) ||
+      /^(what|why|how|who|when|where|is|are|can|should|does|do)\b/i.test(lower);
+
+    // ---- Screen-read context fusion ----
+    let effectivePrompt = userPrompt;
+    if (lastScreenReadContext && isDirectQuestion) {
+      effectivePrompt =
+        `Use the following screen text to answer the question:\n\n` +
+        `--- SCREEN TEXT START ---\n${lastScreenReadContext}\n--- SCREEN TEXT END ---\n\n` +
+        `Question: ${userPrompt}`;
+    }
+
+    // ---- Routing ----
+    appendTranscriptLine(`You: ${userPrompt}`);
+
+    // 1) If user wants summary → summarize
+    if (explicitlySummary) {
+      const summaryPrompt =
+        "Summarize this clearly in bullet points:\n\n" + userPrompt;
+      const ans = await fastAskGroq(summaryPrompt);
+      appendAnswerBlock(ans);
+      return;
+    }
+
+    // 2) If user wants follow-up → provide that only
+    if (explicitlyFollowup) {
+      const fuPrompt =
+        "Provide helpful follow-up questions for this:\n\n" + userPrompt;
+      const ans = await fastAskGroq(fuPrompt);
+      appendAnswerBlock(ans);
+      return;
+    }
+
+    // 3) For ANY direct question → regular answer
+    if (isDirectQuestion) {
+      const ans = await fastAskGroq(effectivePrompt);
+      if (typeof ans === "string" && ans.trim() !== "") {
+        appendAnswerBlock(ans);
+        return;
+      }
+
+      // fallback → main QA engine
+      const fallback = await window.electron.invoke("chat:ask", effectivePrompt);
+      appendAnswerBlock(fallback);
+      return;
+    }
+
+    // 4) Natural text: treat like ChatGPT
+    const ans = await fastAskGroq(effectivePrompt);
+    appendAnswerBlock(ans);
+
+  } catch (err) {
+    appendLog("[unifiedAsk error] " + err.message);
+    appendAnswerBlock("❌ Error: " + err.message);
+  }
+}
