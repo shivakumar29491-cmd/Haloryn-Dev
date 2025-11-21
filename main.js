@@ -60,7 +60,7 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-  win.loadFile('index.html').catch(e => console.error('[boot] loadFile error', e));
+  win.loadFile('indexRoot.html').catch(e => console.error('[boot] loadFile error', e));
   win.on('closed', () => { win = null; });
 }
 
@@ -95,7 +95,7 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-  win.loadFile('index.html').catch(e => console.error('[boot] loadFile error', e));
+  win.loadFile('indexRoot.html').catch(e => console.error('[boot] loadFile error', e));
   win.on('closed', () => { win = null; });
 }
 app.whenReady().then(() => {
@@ -749,9 +749,11 @@ console.log("[answer()] received prompt:", q);
   // 1) GROQ FAST ANSWER FIRST
   try {
     const fast = await groqFastAnswer(q);
-    if (fast && typeof fast === "string" && fast.trim() !== "") {
-      return fast.trim();
-    }
+
+// If Groq returned a meaningful answer (more than 2 characters)
+if (fast && typeof fast === "string" && fast.trim().length > 2) {
+  return fast.trim();
+}
   } catch (err) {
     send("log", `[Groq fast error] ${err.message}`);
   }

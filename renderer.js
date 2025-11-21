@@ -801,8 +801,8 @@ async function unifiedAsk(promptText) {
       console.log("[Renderer] Groq fast error:", err.message);
     }
 
-    // 2) Cloud router fallback (main.js → answer())
-    const fallback = await window.electron.invoke("chat:ask", effectivePrompt);
+    // 2) Web router fallback (Brave/Bing/GooglePSE/SerpAPI)
+    const fallback = await window.electron.invoke("search:router", effectivePrompt);
     console.log("[Renderer] Fallback received:", fallback);
 
     // Normalize ANY return type from main.js into a printable string
