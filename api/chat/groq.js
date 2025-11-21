@@ -3,7 +3,8 @@ import Groq from "groq-sdk";
 
 export default async function handler(req, res) {
   try {
-    const { prompt } = JSON.parse(req.body || '{}');
+    // Vercel already parses JSON → req.body is an object
+    const { prompt } = req.body || {};
     const key = process.env.GROQ_API_KEY;
 
     if (!key) {
