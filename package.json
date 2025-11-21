@@ -2,7 +2,6 @@
   "name": "haloai",
   "version": "0.0.3",
   "main": "main.js",
-  "type": "commonjs",
   "scripts": {
     "start": "electron ."
   },
