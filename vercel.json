@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "functions": {
+    "api/search/*.js": {
+      "runtime": "nodejs20.x"
+    },
+    "api/chat/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}

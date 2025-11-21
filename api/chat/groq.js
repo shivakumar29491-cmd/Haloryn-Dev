@@ -1,0 +1,31 @@
+// api/chat/groq.js
+import Groq from "groq-sdk";
+
+export default async function handler(req, res) {
+  try {
+    const { prompt } = JSON.parse(req.body || '{}');
+    const key = process.env.GROQ_API_KEY;
+
+    if (!key) {
+      return res.status(500).json({ error: 'Missing GROQ_API_KEY' });
+    }
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt' });
+    }
+
+    const groq = new Groq({ apiKey: key });
+
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.1-70b-versatile",
+      temperature: 0.2,
+      max_tokens: 500
+    });
+
+    const text = completion.choices?.[0]?.message?.content || "";
+    return res.status(200).json({ answer: text.trim() });
+
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
