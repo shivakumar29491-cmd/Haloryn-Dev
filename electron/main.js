@@ -80,24 +80,7 @@ function initSearchEngines() {
   }
 }
 
-function createWindow() {
-  win = new BrowserWindow({
-    width: 920,
-    height: 750,
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    titleBarStyle: 'hidden',
-    backgroundMaterial: 'mica',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-  win.loadFile('indexRoot.html').catch(e => console.error('[boot] loadFile error', e));
-  win.on('closed', () => { win = null; });
-}
+
 app.whenReady().then(() => {
   initSearchEngines(); // NEW: wire Brave on boot
   createWindow();
@@ -1127,13 +1110,38 @@ ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
 });
 
 // ---------------- Chat + Doc ingest ----------------
-ipcMain.handle('chat:ask', async(_e, text)=>{
-  console.log("[Main → QA] Sending to QA:", text);
-const out = await answer(text);
-console.log("[QA → Main] Returned:", out);
-return out;
+// Phase-10 unified Groq backend endpoint
+ipcMain.handle("chat:ask", async (_e, prompt) => {
+  try {
+    const res = await fetch(`${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : "http://localhost:3000"}/api/groqweb`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt })
+    });
 
+    const json = await res.json();
+    if (json?.answer) return json.answer;
+    return "No answer.";
+  } catch (err) {
+    return `GroqWeb Error: ${err.message}`;
+  }
 });
+// Phase-10 unified search router endpoint
+ipcMain.handle("search:router", async (_e, query) => {
+  try {
+    const res = await fetch(`${process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL : "http://localhost:3000"}/api/search/router`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, maxResults: 5 })
+    });
+
+    const json = await res.json();
+    return json.results || [];
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 ipcMain.handle('doc:ingestText', async(_e,p)=>{
   const name=(p?.name||'document.txt').toString();
   const raw=(p?.text||'').toString();

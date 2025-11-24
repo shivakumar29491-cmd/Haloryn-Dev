@@ -1,11 +1,14 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" },
-    { "src": "web/package.json", "use": "@vercel/static-build" }
+    { "src": "package.json", "use": "@vercel/static-build" },
+    { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/web/$1" }
-  ]
+  "ignoreCommand": "echo 'Ignoring Electron folders'",
+  "functions": {
+    "api/**.js": {
+      "maxDuration": 15,
+      "memory": 1024
+    }
+  }
 }

@@ -802,7 +802,10 @@ async function unifiedAsk(promptText) {
     }
 
     // 2) Web router fallback (Brave/Bing/GooglePSE/SerpAPI)
-    const fallback = await window.electron.invoke("search:router", effectivePrompt);
+const fallback = await window.electron.invoke("search:router", { 
+  query: effectivePrompt, 
+  maxResults: 5 
+});
     console.log("[Renderer] Fallback received:", fallback);
 
     // Normalize ANY return type from main.js into a printable string
