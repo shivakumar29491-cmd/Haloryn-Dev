@@ -10,3 +10,7 @@ out/
 .DS_Store
 .env
 vercel/
+dist/
+electron/dist/
+out/
+build/
