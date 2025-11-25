@@ -2,29 +2,27 @@ name: Build HaloAI Installers
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch: {}
+    branches: [ "main" ]
 
 jobs:
-
-  build-windows:
+  build-win:
     name: Build Windows .exe
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build Windows Installer (.exe)
-        run: npx electron-builder --win
+      - name: Build Windows Installer
+        run: npm run build:win
 
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
@@ -37,19 +35,19 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build macOS Installer (.dmg)
-        run: npx electron-builder --mac
+      - name: Build macOS Installer
+        run: npm run build:mac
 
       - name: Upload macOS Installer
         uses: actions/upload-artifact@v4
