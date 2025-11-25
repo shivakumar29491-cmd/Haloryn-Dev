@@ -20,9 +20,11 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        shell: powershell
 
       - name: Build Windows Installer
         run: npm run build:win
+        shell: powershell
 
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
@@ -30,9 +32,10 @@ jobs:
           name: HaloAI-Windows
           path: dist/*.exe
 
+
   build-mac:
     name: Build macOS .dmg
-    runs-on: macos-latest
+    runs-on: macos-latest   # CRITICAL
 
     steps:
       - name: Checkout
