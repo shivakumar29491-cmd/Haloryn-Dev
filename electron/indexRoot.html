@@ -2,16 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>HaloAI — Transcribe & Answer</title>
+  <title>HaloNex — Next-gen AI Companion</title>
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
-  <link rel="stylesheet" href="haloAIRoot.css" />
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob:;">
+
+<link rel="stylesheet" href="./haloAIRoot.css" />
 </head>
 <body>
   <div class="app-surface">
+
     <!-- Window chrome -->
     <div class="window-chrome glass">
-      <div class="title">HaloAI — Transcribe & Answer</div>
+
+      <!-- HALONEX Rebrand -->
+   <div class="title brand-inline">
+  <img src="./icons/halonex-32.png" class="brand-logo-inline" />
+  <div class="brand-text-inline">
+    <div class="brand-title-inline">HaloNex</div>
+    <div class="brand-caption-inline">Next-gen AI-Companion</div>
+    <link rel="stylesheet" href="./haloAIRoot.css?v=3" />
+
+  </div>
+</div>
+
+
       <div class="win-buttons">
         <button id="btn-min" title="Minimize">–</button>
         <button id="btn-max" title="Maximize">□</button>
@@ -35,7 +49,7 @@
         </select>
         <span id="liveState">idle</span>
         <button id="companionToggle" class="ghost toggle" title="Live Companion">Companion</button>
-         <button id="screenReadBtn" class="ghost" title="Read text from current screen">Screen Read</button>
+        <button id="screenReadBtn" class="ghost" title="Read text from current screen">Screen Read</button>
       </div>
     </div>
 
@@ -43,13 +57,12 @@
     <section id="tab-live" class="panel show">
       <div class="glass">
 
-    <!-- Transcript box (single source of truth) -->
-<div id="transcript-container" class="glass">
-  <label>Transcript</label>
-  <textarea id="liveTranscript" spellcheck="false" readonly></textarea>
-  <textarea id="transcript" style="display:none;"></textarea>
-</div>
-
+        <!-- Transcript box (single source of truth) -->
+        <div id="transcript-container" class="glass">
+          <label>Transcript</label>
+          <textarea id="liveTranscript" spellcheck="false" readonly></textarea>
+          <textarea id="transcript" style="display:none;"></textarea>
+        </div>
 
         <div class="chat-header-row">
           <span id="docBadge" class="doc-badge hidden"></span>
@@ -61,21 +74,19 @@
         <div class="chat-row">
           <button id="fileBtn" title="Attach document">📎</button>
           <input id="docInput" type="file" accept=".txt,.pdf" hidden />
-          <input id="chatInput" type="text" placeholder="Ask HaloAI… Press Enter" />
+          <input id="chatInput" type="text" placeholder="Ask HaloNex… Press Enter" />
           <button id="chatSend" title="Send">↪</button>
         </div>
 
         <!-- Answer -->
         <div class="answer-box">
-  <label>Answer <a id="clearAnswer" href="javascript:void(0)">🧹</a></label>
+          <label>Answer <a id="clearAnswer" href="javascript:void(0)">🧹</a></label>
 
-  <div id="liveAnswerContainer" class="answer-container">
-    <div id="liveAnswer" class="answer-content"></div>
-  </div>
-</div>
-
-
+          <div id="liveAnswerContainer" class="answer-container">
+            <div id="liveAnswer" class="answer-content"></div>
+          </div>
         </div>
+
       </div>
     </section>
 

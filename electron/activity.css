@@ -1,0 +1,106 @@
+body {
+  margin: 0;
+  padding: 0;
+  background: #0b1220;
+  font-family: system-ui, sans-serif;
+  color: #dbe7ff;
+  overflow-y: auto;
+}
+
+.activity-wrapper {
+  padding: 20px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Hero Section */
+.hero {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.hero-logo {
+  width: 160px;
+  opacity: 0.95;
+}
+
+.hero-title {
+  margin: 10px 0 5px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.hero-subtitle {
+  font-size: 14px;
+  opacity: 0.8;
+  margin-bottom: 30px;
+}
+
+/* Cards */
+.card-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+.card {
+  background: rgba(18, 24, 40, 0.45);
+  border: 1px solid rgba(130,170,255,0.25);
+  padding: 14px;
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.card:hover {
+  background: rgba(58,134,255,0.25);
+}
+
+/* Timeline */
+.timeline h3 {
+  margin: 18px 0 6px;
+  opacity: 0.85;
+}
+
+.timeline-section {
+  border-left: 2px solid rgba(130,170,255,0.25);
+  margin-left: 10px;
+  padding-left: 14px;
+  margin-bottom: 16px;
+  min-height: 20px;
+}
+
+/* Start Session Button */
+.start-btn {
+  display: block;
+  margin: 30px auto;
+  padding: 12px 26px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: none;
+  background: #3a86ff;
+  color: #fff;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.start-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* Slide-up Transition */
+.slide-up {
+  animation: slideUpScreen 0.45s cubic-bezier(.25,.46,.45,.94) forwards;
+}
+
+@keyframes slideUpScreen {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-100%); opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

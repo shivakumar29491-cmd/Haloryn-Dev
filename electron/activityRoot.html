@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>HaloNex — Activity</title>
+  <link rel="stylesheet" href="activity.css" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+</head>
+
+<body>
+  <div id="activityWrapper" class="activity-wrapper">
+
+    <!-- HERO LOGO -->
+    <div class="hero">
+      <img src="./icons/halonex.png" class="hero-logo" />
+      <h2 class="hero-title">Welcome back, Shiva</h2>
+      <p class="hero-subtitle">Here’s your HaloNex activity timeline</p>
+    </div>
+
+    <!-- QUICK ACTION CARDS -->
+    <div class="card-row">
+      <div class="card">Recent Chats</div>
+      <div class="card">Transcripts</div>
+      <div class="card">OCR Snips</div>
+      <div class="card">Screen Reads</div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="timeline">
+      <h3>Today</h3>
+      <div id="timeline-today" class="timeline-section"></div>
+
+      <h3>Yesterday</h3>
+      <div id="timeline-yesterday" class="timeline-section"></div>
+
+      <h3>Older</h3>
+      <div id="timeline-older" class="timeline-section"></div>
+    </div>
+
+    <!-- START SESSION BUTTON -->
+    <button id="startSessionBtn" class="start-btn">Start Session</button>
+
+  </div>
+
+  <script src="activity.js"></script>
+</body>
+</html>

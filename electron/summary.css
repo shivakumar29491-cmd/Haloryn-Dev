@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  background: #0b1220;
+  font-family: system-ui, sans-serif;
+  color: #dbe7ff;
+}
+
+.summary-chrome {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(18,24,40,.55);
+  border-bottom: 1px solid rgba(130,170,255,.25);
+}
+
+.summary-chrome .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo {
+  width: 20px;
+  height: 20px;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #ff5d5d;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.summary-header {
+  text-align: center;
+  font-size: 24px;
+  margin-top: 20px;
+  margin-bottom: 30px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  padding: 0 30px;
+}
+
+.card {
+  background: rgba(18,24,40,0.45);
+  border: 1px solid rgba(130,170,255,.25);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+
+.card label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 8px;
+}
+
+.card p {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.finish-btn {
+  display: block;
+  margin: 40px auto;
+  padding: 12px 24px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: none;
+  background: #3a86ff;
+  color: #fff;
+  cursor: pointer;
+}

@@ -21,6 +21,8 @@ const { clipboard } = require("electron");
 const { exec } = require("child_process");
 // --- Groq Fast Engines ---
 const { groqWhisperTranscribe, groqFastAnswer } = require("./groqEngine");
+let lastSessionSummary = null;
+let isSessionActive = false;
 
 
 
@@ -49,21 +51,19 @@ function send(ch, payload) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 920,
-    height: 750,
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    titleBarStyle: 'hidden',
-    backgroundMaterial: 'mica',
+    width: 1200,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 780,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+      preload: path.join(__dirname, "preload.js")
+    },
+    frame: false,
+    titleBarStyle: "hiddenInset"
   });
-  win.loadFile("electron/indexRoot.html").catch(e => console.error('[boot] loadFile error', e));
-  win.on('closed', () => { win = null; });
+
+  // Startup page → ALWAYS Activity Page
+  win.loadFile(path.join(__dirname, "activityRoot.html"));
 }
 
 
@@ -1009,6 +1009,30 @@ function startChunk(){
   };
   recordWithSox(outfile,dMs,after, recConfig.device, recConfig.gainDb);
 }
+//Activity page Handler
+ipcMain.on("start-session", () => {
+  isSessionActive = true;
+
+  if (win && !win.isDestroyed()) {
+    win.loadFile(path.join(__dirname, "indexRoot.html"))
+    .catch(err => console.error("[start-session loadFile error]", err));
+  }
+});
+
+ipcMain.on("end-session", (e, summary) => {
+    lastSessionSummary = summary;
+    win.loadFile(path.join(__dirname, "summaryRoot.html"));
+});
+ipcMain.on("exit-app", () => {
+  app.quit();
+});
+
+ipcMain.on("finish-session", () => {
+  win.loadFile(path.join(__dirname, "activityRoot.html"));
+});
+ipcMain.handle("get-summary", () => {
+  return lastSessionSummary;
+});
 
 
 // Mirror handlers for Companion overlay API (used by preload.js)
@@ -1248,7 +1272,20 @@ ipcMain.handle("screenread:getClipboardImage", async () => {
 // ---------------- Window controls / env ----------------
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
-ipcMain.handle('window:close', ()=>app.exit(0));
+ipcMain.handle("window:close", async () => {
+  // If session just ended, show summary page
+  if (isSessionActive) {
+    isSessionActive = false;
+    if (win && !win.isDestroyed()) {
+      await win.loadFile(path.join(__dirname, "summaryRoot.html"));
+    }
+    return;
+  }
+
+  // If already on summary → quit app
+  app.quit();
+});
+
 ipcMain.handle('window:restore', () => {
   if (win && win.isMinimized()) win.restore();
 });

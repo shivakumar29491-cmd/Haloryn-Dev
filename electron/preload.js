@@ -18,13 +18,25 @@ contextBridge.exposeInMainWorld("electron", {
 
 
 contextBridge.exposeInMainWorld('windowCtl', {
-  minimize: () => ipcRenderer.invoke('window:minimize'),
-  maximize: () => ipcRenderer.invoke('window:maximize'),
-  restore: () => ipcRenderer.invoke('window:restore'),
-  close:    () => ipcRenderer.invoke('window:close')
+   minimize: () => ipcRenderer.invoke('window:minimize'),
+   maximize: () => ipcRenderer.invoke('window:maximize'),
+   restore: () => ipcRenderer.invoke('window:restore'),
+   close:    () => ipcRenderer.invoke('window:close'),
+   getSummary: () => ipcRenderer.invoke("get-summary"),
+   endSession: (payload) => ipcRenderer.send("end-session", payload),
+   finishSession: () => ipcRenderer.send("finish-session"),
+   exitApp: () => ipcRenderer.send("exit-app")
 });
 
+
+ // NEW – required for summaryRoot.html
+ contextBridge.exposeInMainWorld('sessionAPI', {
+    get: () => ipcRenderer.invoke("get-summary")
+});
+
+
 contextBridge.exposeInMainWorld('companion', {
+  startSession: () => ipcRenderer.send("start-session"),
   start: () => ipcRenderer.invoke('companion:start'),
   stop:  () => ipcRenderer.invoke('companion:stop'),
   onState:      (cb) => ipcRenderer.on('companion:state',      (_, s) => cb(s)),

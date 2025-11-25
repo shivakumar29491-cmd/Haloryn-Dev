@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>HaloNex — Session Summary</title>
+  <link rel="stylesheet" href="summary.css" />
+</head>
+
+<body>
+  <div class="summary-container">
+
+    <!-- TOP BAR -->
+    <div class="summary-chrome">
+      <div class="title">
+        <img src="./icons/halonex-32.png" class="logo" />
+        <span>HaloNex — Session Summary</span>
+      </div>
+
+      <!-- THIS X BUTTON QUITS THE APP -->
+      <button id="closeSummary" class="close-btn">×</button>
+    </div>
+
+    <!-- HEADER -->
+    <h2 class="summary-header">Your Session at a Glance</h2>
+
+    <!-- SUMMARY CARDS -->
+    <div class="cards">
+      <div class="card">
+        <label>Duration</label>
+        <p id="dur"></p>
+      </div>
+
+      <div class="card">
+        <label>Questions Asked</label>
+        <p id="qs"></p>
+      </div>
+
+      <div class="card">
+        <label>AI Responses</label>
+        <p id="as"></p>
+      </div>
+
+      <div class="card">
+        <label>Transcript Length</label>
+        <p id="words"></p>
+      </div>
+    </div>
+
+    <button id="finishBtn" class="finish-btn">Back to Activity</button>
+
+  </div>
+
+  <script src="summary.js"></script>
+</body>
+</html>

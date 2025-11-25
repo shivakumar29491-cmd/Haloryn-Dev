@@ -1,3 +1,12 @@
+/* RESET activity page styles completely */
+/* Reset ONLY inside the live app panel, NOT global */
+#liveApp *, 
+#liveApp html, 
+#liveApp body {
+  all: unset;
+  display: revert;
+}
+
 :root{
   --bg:#0b1220; --panel:rgba(17,26,43,.35); --border:rgba(130,170,255,.20);
   --text:#dbe7ff; --muted:#9ab0d0; --accent:#3a86ff; --danger:#ff5d5d;
@@ -445,4 +454,39 @@ button.recording,
 /* Each answer entry appended from JS */
 .answer-entry {
     margin-bottom: 8px;
+}
+/* ==== HaloNex Branding (Top Bar) ==== */
+
+.brand-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-logo-inline {
+  width: 20px;
+  height: 20px;
+  opacity: 0.95;
+}
+
+.brand-text-inline {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+  margin-top: -1px;
+}
+
+.brand-title-inline {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #4A9BFF;
+}
+
+.brand-caption-inline {
+  font-size: 9px;
+  line-height: 1;
+  margin-top: 2px;
+  color: #85caff;
+  opacity: .8;
 }

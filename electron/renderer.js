@@ -827,4 +827,64 @@ const fallback = await window.electron.invoke("search:router", {
     setState("idle");
   }
 }
+// ==============================================
+//  SESSION SUMMARY COLLECTOR  (HaloNex Summary)
+// ==============================================
+
+// Track session start
+let __sessionStart = Date.now();
+let __questions = 0;
+let __answers = 0;
+
+function countWords(text) {
+  return (text || "").split(/\s+/).filter(Boolean).length;
+}
+
+// Count all questions asked through unifiedAsk
+const oldUnifiedAsk = unifiedAsk;
+unifiedAsk = async function(promptText) {
+  __questions++;
+  return oldUnifiedAsk(promptText);
+};
+
+// Count answers
+const oldAppendAnswer = appendAnswerBlock;
+appendAnswerBlock = function(txt) {
+  __answers++;
+  return oldAppendAnswer(txt);
+};
+
+// Prepare + send summary object
+async function sendSessionSummary() {
+  const now = Date.now();
+  const durationMs = now - __sessionStart;
+
+  const transcriptText = document.getElementById("liveTranscript")?.value || "";
+  const wordCount = countWords(transcriptText);
+
+  const summary = {
+    duration: msToHuman(durationMs),
+    questions: __questions,
+    answers: __answers,
+    words: wordCount
+  };
+
+  console.log("SUMMARY BUILT:", summary);
+  window.windowCtl.endSession(summary);
+}
+
+function msToHuman(ms) {
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return sec + " sec";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m ${s}s`;
+}
+
+// ==============================================
+//  INTERCEPT OS WINDOW X → send summary
+// ==============================================
+window.electron.on("trigger:end-session", () => {
+  sendSessionSummary();
+});
 
