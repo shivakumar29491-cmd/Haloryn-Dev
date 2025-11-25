@@ -2,8 +2,12 @@
   "name": "haloai",
   "version": "0.0.3",
   "main": "electron/main.js",
+  "productName": "HaloAI",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build": "electron-builder"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
@@ -17,6 +21,35 @@
     "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.imsk.haloai",
+    "productName": "HaloAI",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/sharp/**"
+    ],
+    "npmRebuild": true,
+    "forceCodeSigning": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    }
+  },
+  "win": {
+    "target": "nsis",
+    "signAndEditExecutable": false
   }
 }

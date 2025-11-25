@@ -1,0 +1,59 @@
+name: Build HaloAI Installers
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}   # Trigger manually when needed
+
+jobs:
+
+  build-windows:
+    name: Build Windows .exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows Installer (.exe)
+        run: npx electron-builder --win
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v3
+        with:
+          name: HaloAI-Windows
+          path: dist/*.exe
+
+
+  build-mac:
+    name: Build macOS .dmg
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build macOS Installer (.dmg)
+        run: npx electron-builder --mac
+
+      - name: Upload macOS Installer
+        uses: actions/upload-artifact@v3
+        with:
+          name: HaloAI-macOS
+          path: dist/*.dmg
