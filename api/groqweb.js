@@ -1,5 +1,8 @@
 // electron/api/groqweb.js
 // Phase 10 — Unified AI Endpoint for Electron + Web
+export const config = {
+  runtime: "edge"
+};
 
 const Groq = require("groq-sdk");
 

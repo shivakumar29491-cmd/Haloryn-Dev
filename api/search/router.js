@@ -1,5 +1,8 @@
 // api/search/router.js
 // Phase 10 — Unified backend router for Brave → SerpAPI → GooglePSE → Bing → Groq
+export const config = {
+  runtime: "edge"
+};
 
 const fetch = require("node-fetch");
 const { getProviderOrder } = require("../utils/providerSelector");
