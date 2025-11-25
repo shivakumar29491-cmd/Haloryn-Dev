@@ -1,0 +1,24 @@
+# Ignore build output
+dist/
+dist/**
+win-unpacked/
+win-unpacked/**
+
+# Electron packaged files
+*.asar
+*.exe
+*.dmg
+*.blockmap
+
+# Node modules
+node_modules/
+
+# Logs & temp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Environment files
+.env
