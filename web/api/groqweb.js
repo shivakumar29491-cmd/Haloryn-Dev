@@ -35,8 +35,13 @@ export default async function handler(req) {
 
     const data = await groqRes.json();
 
-    const answer =
-      data?.choices?.[0]?.message?.content || "No answer from Groq.";
+ if (data.error) {
+  return cors({ ok: false, error: data.error.message });
+}
+
+const answer =
+  data?.choices?.[0]?.message?.content || "No answer from Groq.";
+
 
     return cors({ ok: true, answer });
 
