@@ -4,6 +4,8 @@
 
 */
 
+const { contextBridge, ipcRenderer } = require("electron");
+
 contextBridge.exposeInMainWorld("electronAPI", {
   saveUserSession: (data) =>
     ipcRenderer.send("save-user-session", data),

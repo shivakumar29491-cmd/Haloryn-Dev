@@ -22,13 +22,13 @@
 }
 
 .app-surface {
-  min-height: 100vh;
+  height: 100vh;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   background: transparent;   /* was the dark gradient */
-  overflow: auto;
+  overflow: hidden;          /* keep the window sized to viewport */
 }
 
 
@@ -90,7 +90,13 @@ button,input,select,textarea{font:inherit;color:var(--text)}
 .tab.active{background:rgba(27,42,74,.6);color:var(--text)}
 
 .panel{display:none;padding:12px}
-.panel.show{display:block}
+.panel.show{
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  min-height:0;         /* allow inner scroll instead of stretching window */
+  overflow:hidden;
+}
 
 /* Live controls + search mode */
 .live-controls{
@@ -126,7 +132,12 @@ button:hover{filter:brightness(1.1)}
 
 .glass{
   background:var(--panel);border:1px solid var(--border);
-  border-radius:12px;padding:10px
+  border-radius:12px;padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-height:0;
+  overflow:hidden;      /* keep the panel inside viewport */
 }
 
 /* Chat */
@@ -208,6 +219,8 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex:1;
+  min-height:0;   /* allow the answer container to scroll instead of expanding */
 }
 .answer-log {
   width: 100%;
@@ -231,7 +244,9 @@ button:hover{filter:brightness(1.1)}
   padding: 10px;
   backdrop-filter: blur(10px);
   overflow-y: auto;
-  max-height: 65vh; /* taller scrollable area */
+  flex: 1;
+  min-height: 0;
+  max-height: none; /* let flex control height within viewport */
 }
 .answer-content {
   display: flex;

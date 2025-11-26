@@ -45,13 +45,14 @@ export async function loginManual(email, password, sendTo, phone) {
 
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
-  const cred = await signInWithPopup(auth, provider);
-  return cred.user;
-}
-
-export async function loginGoogleRedirect() {
-  const provider = new GoogleAuthProvider();
-  await signInWithRedirect(auth, provider);
+  try {
+    const cred = await signInWithPopup(auth, provider);
+    return cred.user;
+  } catch (err) {
+    // Fallback to redirect if popup fails (blocked or unsupported)
+    await signInWithRedirect(auth, provider);
+    return null;
+  }
 }
 
 export async function resolveRedirectLogin() {
@@ -61,13 +62,14 @@ export async function resolveRedirectLogin() {
 
 export async function loginFacebook() {
   const provider = new FacebookAuthProvider();
-  const cred = await signInWithPopup(auth, provider);
-  return cred.user;
-}
-
-export async function loginFacebookRedirect() {
-  const provider = new FacebookAuthProvider();
-  await signInWithRedirect(auth, provider);
+  try {
+    const cred = await signInWithPopup(auth, provider);
+    return cred.user;
+  } catch (err) {
+    // Fallback to redirect if popup fails (blocked or unsupported)
+    await signInWithRedirect(auth, provider);
+    return null;
+  }
 }
 
 export async function verifyOtpFlow(type, payload) {

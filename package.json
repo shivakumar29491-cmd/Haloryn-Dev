@@ -37,7 +37,8 @@
       "output": "dist"
     },
     "files": [
-      "**/*"
+      "**/*",
+      "!dist*/**"
     ],
     "win": {
       "target": "nsis",
@@ -46,6 +47,9 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity"
+    },
+    "nsis": {
+      "include": "build/installer.nsh"
     }
   },
   "win": {

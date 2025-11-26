@@ -82,13 +82,13 @@ ipcMain.handle("get-user-session", () => {
 
 ipcMain.handle("load-activity", async () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
+    console.log("load-activity IPC received, navigating to activityRoot.html");
     await mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
     return true;
   }
+  console.warn("load-activity IPC failed: no mainWindow");
   return false;
 });
-
-app.whenReady().then(createWindow);
 
 // ---------------- Window ----------------
 let win;
@@ -219,7 +219,9 @@ function initSearchEngines() {
 
 app.whenReady().then(() => {
   initSearchEngines(); // NEW: wire Brave on boot
-  createWindow();
+  if (!mainWindow) {
+    createWindow();
+  }
   try {
     globalShortcut.register('CommandOrControl+Shift+Space', () => {
       if (!win) return;
