@@ -32,16 +32,23 @@ async function groqWhisperTranscribe(audioBuffer) {
 // -----------------------------------------------------------
 // 2. FAST ANSWER — USE HALOAI BACKEND (NOT GROQ DIRECT)
 // -----------------------------------------------------------
-async function groqFastAnswer(prompt) {
+async function groqFastAnswer(prompt, docContextText = '', docName = '') {
+  let prefixed = prompt;
+  if (docContextText) {
+    // Keep doc context short but present to steer Groq toward the attached file
+    const ctx = docContextText.slice(0, 4000);
+    const name = docName ? `("${docName}")` : '';
+    prefixed = `Document context ${name}:\n${ctx}\n\nUser prompt:\n${prompt}`;
+  }
   try {
    const result = await groq.chat.completions.create({
   model: "llama-3.1-8b-instant",
   messages: [
     {
       role: "system",
-      content: "You are HaloAI. Return concise, no-fluff answers. Prefer bullet steps when instructional. Keep code minimal and focused. Do not narrate; skip extraneous preamble and closing remarks."
+      content: "You are HaloAI. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
     },
-    { role: "user", content: prompt }
+    { role: "user", content: prefixed }
   ],
   temperature: 0.15,
   // Allow longer, still bounded (model supports larger contexts)

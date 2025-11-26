@@ -665,6 +665,7 @@ if (window.companion) {
     try {
       if (isOn) { await window.companion.stop(); }
       else      { await window.companion.start(); }
+      revealPanels();
     } catch (e) { appendLog(`[companion] toggle error: ${e.message}`); }
   });
 
@@ -672,6 +673,7 @@ if (window.companion) {
     const onState = s === 'on';
     if (onState) {
       setState('listening');
+      revealPanels();
       document.body.classList.add('companion-on');
       companionToggle?.classList.add('active','pulsing');
       companionToggle.textContent = 'Companion • ON';
@@ -701,7 +703,7 @@ if (window.companion) {
 
 // ------------------ Chat + Doc QA (file ingest + chat-to-answer) ------------------
 const fileBtn   = $('#fileBtn');
-//const docInput  = $('#docInput');
+const docInput  = $('#docInput');
 const docBadge  = $('#docBadge');
 
 function showDocBadge(name, count) {
@@ -741,7 +743,12 @@ on(chatSend, 'click', () => {
   chatInput.value = "";
 });
 
-on(fileBtn, 'click', () => docInput?.click());
+on(fileBtn, 'click', () => {
+  if (docInput) {
+    docInput.value = '';
+    docInput.click();
+  }
+});
 on(docInput, 'change', async () => {
   const f = docInput?.files?.[0];
   if (!f) return;

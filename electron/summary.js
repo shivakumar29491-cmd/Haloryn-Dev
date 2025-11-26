@@ -11,12 +11,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Close summary → quit app
-  document.getElementById("closeSummary").addEventListener("click", () => {
-    window.windowCtl.exitApp();
-  });
-
-  // Back to Activity button
-  document.getElementById("finishBtn").addEventListener("click", () => {
-    window.windowCtl.finishSession();
-  });
+  const closeBtn = document.getElementById("closeSummary");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      window.windowCtl.exitApp();
+    });
+  }
 });

@@ -231,7 +231,7 @@ button:hover{filter:brightness(1.1)}
   padding: 10px;
   backdrop-filter: blur(10px);
   overflow-y: auto;
-  max-height: calc(100vh - 240px); /* keep scrollable even on short windows */
+  max-height: 65vh; /* taller scrollable area */
 }
 .answer-content {
   display: flex;

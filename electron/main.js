@@ -2,7 +2,9 @@
 // HaloAI — main.js (Recorder + Whisper + Chat + Doc QA + Live Companion)
 // Phase 5.11–5.15 updates included + Brave API wiring
 // =====================================================
-require('dotenv').config();
+const path = require('path');
+// Load .env from electron/ folder and override any existing env so local paths win
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 
 const { app, BrowserWindow, ipcMain, dialog, globalShortcut } = require('electron');
 // FORCE Electron to use the electron/ folder as working directory
@@ -11,7 +13,6 @@ process.chdir(__dirname);
 const { spawn } = require('child_process');
 const fs   = require('fs');
 const os   = require('os');
-const path = require('path');
 const fetch = require('node-fetch');
 const cheerio = require('cheerio');
 const { URL } = require('url');
@@ -107,7 +108,9 @@ app.on('window-all-closed', () => app.quit());
 // ---------------- Whisper (tuned for speed) ----------------
 const WHISPER_BIN     = process.env.WHISPER_BIN     || 'C:\\dev\\whisper.cpp\\build\\bin\\Release\\whisper-cli.exe';
 const WHISPER_MODEL   = process.env.WHISPER_MODEL   || 'C:\\dev\\whisper.cpp\\models\\ggml-tiny.en.bin'; // fastest sensible default
-const WHISPER_THREADS = Number(process.env.WHISPER_THREADS || 4);
+// Fewer threads by default to reduce CPU spikes on live/companion
+const WHISPER_THREADS = Number(process.env.WHISPER_THREADS || 2);
+const RECENT_TRANSCRIPT_LINES = 10;
 const WHISPER_NGL     = String(process.env.WHISPER_NGL || '0'); // GPU offload layers if compiled (e.g. "20")
 const LANG            = process.env.WHISPER_LANG || 'en';
 
@@ -135,15 +138,27 @@ function runWhisper(filePath){
       const child = spawn(WHISPER_BIN, args, { windowsHide:true });
       child.stdout.on('data', d => send('log', d.toString()));
       let _stderr='';
-      child.stderr.on('data', d => { const s=d.toString(); _stderr+=s; send('log', `[stderr] ${s}`); });
+      child.stderr.on('data', d => {
+        const s = d.toString();
+        _stderr += s;
+        // Drop noisy timing/blank markers from UI log to reduce spam
+        if (!/BLANK_AUDIO/i.test(s) && !/whisper_print_timings/i.test(s) && !/output_txt:/i.test(s)) {
+          send('log', `[stderr] ${s}`);
+        }
+      });
       child.on('close', () => {
         try {
           if (/\b(usage:|Voice Activity Detection|options:)\b/i.test(_stderr)) {
             send('log','[whisper] usage/help detected — treating as empty');
             return resolve('');
           }
-          const text = fs.existsSync(outTxt) ? fs.readFileSync(outTxt, 'utf8').trim() : '';
-          resolve(text);
+          const raw = fs.existsSync(outTxt) ? fs.readFileSync(outTxt, 'utf8').trim() : '';
+          const cleaned = raw
+            .split(/\r?\n+/)
+            .map(s => s.trim())
+            .filter(s => s && !/BLANK_AUDIO/i.test(s) && !/^\[\d{2}:\d{2}/.test(s))
+            .join('\n');
+          resolve(cleaned);
         } catch(e){ reject(e); }
       });
       child.on('error', reject);
@@ -690,8 +705,8 @@ async function genericAnswer(userText){
       },
       body:JSON.stringify({
         model:process.env.FALLBACK_MODEL||'gpt-4o-mini',
-        temperature:0.7,
-        max_tokens:350,
+        temperature:0.6,
+        max_tokens:700,
         messages:[
           {role:'system',content:'You are HaloAI. Provide clear, direct answers.'},
           {role:'user',content:userText}
@@ -738,6 +753,45 @@ async function answer(userText) {
   console.log("[answer()] received prompt:", q);
 
   if (!q) return '';
+
+  // --------------------------------------
+  // 0) DOC CONTEXT (if attached + enabled)
+  // --------------------------------------
+  if (useDoc && docContext.text) {
+    try {
+      // Try a doc-focused Groq answer first (doc context + question)
+      try {
+        const docChunks = selectRelevantChunks(q, docContext.text, 8).filter(Boolean);
+        let docCtx = docChunks.join('\n\n');
+        if (!docCtx) {
+          docCtx = docContext.text.slice(0, 2000);
+        }
+        const docPrompt = `You are given a document "${docContext.name}". Answer using ONLY this document. If the document truly lacks the answer, say "I couldn't find this in the document." Correct typos in the question based on context.\n\nDocument excerpt:\n${docCtx}\n\nQuestion: ${q}`;
+        const docFast = await groqFastAnswer(docPrompt, docCtx, docContext.name);
+        if (docFast && docFast.trim().length > 2) {
+          send("log", "[Groq] Doc-aware answer succeeded.");
+          return docFast.trim();
+        }
+      } catch (e) {
+        send("log", `[Groq doc-aware error] ${e.message}`);
+      }
+
+      if (docEnrich) {
+        const docEnriched = await docEnrichAnswer(q, docContext.text);
+        if (docEnriched && docEnriched.trim()) return docEnriched.trim();
+      } else {
+        const docOnly = await openAIDocAnswer(q, docContext.text);
+        if (docOnly && !/couldn'?t find this in the document/i.test(docOnly)) {
+          return docOnly.trim();
+        }
+      }
+    } catch (e) {
+      send("log", `[Doc answer error] ${e.message}`);
+    }
+    // Lightweight fallback if no cloud key or doc answer failed
+    const summary = extractiveSummary(docContext.text, q, 6);
+    if (summary && summary.trim()) return summary.trim();
+  }
 
   // --------------------------------------
   // 1) GROQ FAST ANSWER (PRIMARY ENGINE)
@@ -857,17 +911,17 @@ function isWebHeavyTopic(text) {
 
 // Live questions: skip doc path, auto-route to web/generic
 async function answerLiveQuestion(text) {
-  const q = String(text || '').trim();
-  if (!q) return '';
+  const full = String(text || '').trim();
+  if (!full) return '';
 
-  // If finance/markets/weather/news → web-only via genericAnswer
-  if (isWebHeavyTopic(q)) {
-    // genericAnswer already respects searchPrefs + smartSearch/OpenAI
-    return await genericAnswer(q);
-  }
+  // Build a short context window from recent transcript lines to give the model continuity
+  const lines = full.split(/\r?\n/).filter(Boolean);
+  const ctx = lines.slice(-RECENT_TRANSCRIPT_LINES).join('\n');
+  const lastLine = lines.length ? lines[lines.length - 1] : full;
+  const payload = ctx ? `Context:\n${ctx}\n\nQuestion: ${lastLine}` : lastLine;
 
-  // For now, all live questions bypass doc context (5.13 requirement)
-  return await genericAnswer(q);
+  // Route through the same answer pipeline used by chat (doc + web aware)
+  return await answer(payload);
 }
 
 // ---------------- Paths / Recorder ----------------
@@ -904,7 +958,10 @@ function recordWithSox(outfile, ms, onDone, device = 'default', gainDb = '0'){
 
 // ---------------- Live + Companion pipeline ----------------
 let live={on:false, idx:0, transcript:''};
-let recConfig={device:'default', gainDb:'0', chunkMs:1200};
+let pendingAnswerTimer = null;
+let pendingAnswerCtx = '';
+// Larger chunk reduces CPU churn; can be overridden via UI config
+let recConfig={device:'default', gainDb:'0', chunkMs:2000};
 
 // Live Companion state
 const companion = {
@@ -1002,15 +1059,29 @@ function startChunk(){
     (async()=>{
       try{
         const text=(await runWhisper(outfile))||'';
-        if(text){
-          live.transcript+=(live.transcript?'\n':'')+text;
+        const normalized = text.replace(/\s+/g,' ').trim();
+        if(normalized){
+          // Append each recognized utterance as its own line (no concatenated run-on)
+          live.transcript += (live.transcript ? '\n' : '') + normalized;
+          // keep transcript lightweight: cap to last 3000 chars
+          if (live.transcript.length > 3000) {
+            live.transcript = live.transcript.slice(-3000);
+          }
           send('live:transcript',live.transcript);
 
-          // Phase 5.13: only answer when chunk looks like a user question
-          if (isQuestion(text)) {
-            const a = await answerLiveQuestion(text);
-            if(a) send('live:answer',a);
-          }
+          // Debounce answering until user stops speaking; reset timer on every chunk
+          if (pendingAnswerTimer) clearTimeout(pendingAnswerTimer);
+          pendingAnswerCtx = live.transcript;
+          pendingAnswerTimer = setTimeout(async () => {
+            try{
+              const answerText = await answerLiveQuestion(pendingAnswerCtx);
+              if (answerText) send('live:answer', answerText);
+            }catch(e){
+              send('log', `[live answer error] ${e.message}`);
+            }finally{
+              pendingAnswerTimer = null;
+            }
+          }, 2000); // wait for ~2s of silence before answering
         } else send('log','[whisper] (empty transcript)');
       }catch(e){ send('log', `[whisper:error] ${e.message}`); }
     })();
@@ -1147,7 +1218,9 @@ ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
 // Phase-10 unified Groq backend endpoint
 ipcMain.handle("chat:ask", async (_e, prompt) => {
   try {
-    const ans = await groqFastAnswer(prompt);
+    const docText = useDoc ? (docContext.text || '') : '';
+    const docName = useDoc ? (docContext.name || '') : '';
+    const ans = await groqFastAnswer(prompt, docText, docName);
     return ans || "No answer.";
   } catch (err) {
     return `Groq Error: ${err.message}`;
@@ -1175,7 +1248,10 @@ ipcMain.handle('doc:ingestText', async(_e,p)=>{
   const raw=(p?.text||'').toString();
   const text=raw.replace(/\u0000/g,'').slice(0,200000);
   docContext={name,text,tokens:null};
+  useDoc = true; // auto-enable doc mode when a doc is loaded
+  send('log', `[doc] context ready: ${name}`);
   send('log', `[doc] loaded text: ${name}, ${text.length} chars`);
+  send('live:answer', `Document loaded: ${name} (${text.length} chars). Ask your question and I'll answer using it.`);
   return {ok:true, name, chars:text.length};
 });
 ipcMain.handle('doc:ingestBinary', async(_e,p)=>{
@@ -1197,7 +1273,10 @@ ipcMain.handle('doc:ingestBinary', async(_e,p)=>{
       const data=await pdfParse(buff);
       const text=(data.text||'').slice(0,200000);
       docContext={name,text,tokens:null};
+      useDoc = true; // auto-enable doc mode when a doc is loaded
+      send('log', `[doc] context ready: ${name}`);
       send('log', `[doc] loaded PDF: ${name}, ${text.length} chars`);
+      send('live:answer', `Document loaded: ${name} (${text.length} chars). Ask your question and I'll answer using it.`);
       return {ok:true, name, chars:text.length, type:'pdf'};
     }catch(e){
       const msg=`[doc] PDF load error: ${e.message}`;
@@ -1281,16 +1360,16 @@ ipcMain.handle("screenread:getClipboardImage", async () => {
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
 ipcMain.handle("window:close", async () => {
-  // If session just ended, show summary page
+  // If session active, go to summary page
   if (isSessionActive) {
     isSessionActive = false;
+    try { send('trigger:end-session'); } catch {}
     if (win && !win.isDestroyed()) {
       await win.loadFile(path.join(__dirname, "summaryRoot.html"));
+      return;
     }
-    return;
   }
-
-  // If already on summary → quit app
+  // If already on summary or no session, quit
   app.quit();
 });
 
