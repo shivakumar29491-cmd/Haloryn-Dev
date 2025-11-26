@@ -23,8 +23,6 @@ const {
   clipboard
 } = require("electron");
 
-process.chdir(__dirname);
-
 const { spawn, exec } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -102,7 +100,6 @@ function send(ch, payload) {
   }
 }
 app.setAppUserModelId("Haloryn");
-process.chdir(__dirname);
 
 function startRendererServer() {
   if (rendererServerPort) return Promise.resolve(rendererServerPort);
