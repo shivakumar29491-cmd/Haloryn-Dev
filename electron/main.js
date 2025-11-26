@@ -5,6 +5,9 @@
 require('dotenv').config();
 
 const { app, BrowserWindow, ipcMain, dialog, globalShortcut } = require('electron');
+// FORCE Electron to use the electron/ folder as working directory
+process.chdir(__dirname);
+
 const { spawn } = require('child_process');
 const fs   = require('fs');
 const os   = require('os');
@@ -48,6 +51,8 @@ function send(ch, payload) {
     try { win.webContents.send(ch, payload); } catch {}
   }
 }
+app.setAppUserModelId("HaloNex");
+process.chdir(__dirname);
 
 function createWindow() {
   win = new BrowserWindow({
@@ -55,16 +60,19 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 780,
+    transparent: true,                 // <— allow window to be see-through
+    backgroundColor: '#00000000',      // <— fully transparent
     webPreferences: {
       preload: path.join(__dirname, "preload.js")
     },
     frame: false,
     titleBarStyle: "hiddenInset"
   });
-
-  // Startup page → ALWAYS Activity Page
   win.loadFile(path.join(__dirname, "activityRoot.html"));
 }
+
+
+
 
 
 

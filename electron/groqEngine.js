@@ -37,11 +37,15 @@ async function groqFastAnswer(prompt) {
    const result = await groq.chat.completions.create({
   model: "llama-3.1-8b-instant",
   messages: [
-    { role: "system", content: "You are HaloAI. Provide a direct, concise answer." },
+    {
+      role: "system",
+      content: "You are HaloAI. Return concise, no-fluff answers. Prefer bullet steps when instructional. Keep code minimal and focused. Do not narrate; skip extraneous preamble and closing remarks."
+    },
     { role: "user", content: prompt }
   ],
-  temperature: 0.2,
-  max_tokens: 200
+  temperature: 0.15,
+  // Allow longer, still bounded (model supports larger contexts)
+  max_tokens: 4096
 });
 
     const text = result.choices?.[0]?.message?.content || "";

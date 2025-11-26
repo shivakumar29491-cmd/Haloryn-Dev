@@ -8,6 +8,8 @@ jobs:
   build-win:
     name: Build Windows .exe
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
@@ -19,7 +21,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
         shell: powershell
 
       - name: Build Windows Installer
@@ -35,7 +37,10 @@ jobs:
 
   build-mac:
     name: Build macOS .dmg
-    runs-on: macos-latest   # CRITICAL
+    # Use Intel runner to avoid arm64 exec format errors with 7zip/electron-builder
+    runs-on: macos-13
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
@@ -47,7 +52,10 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Ensure electron-builder is executable
+        run: chmod +x ./node_modules/.bin/electron-builder
 
       - name: Build macOS Installer
         run: npm run build:mac

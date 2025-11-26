@@ -1,3 +1,7 @@
+console.log("LOADED HTML:", window.location.pathname);
+
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("DOM READY");
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOM fully loaded");
 });
@@ -9,7 +13,23 @@ const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
 
 // Force textarea as the single transcript sink
 const transcriptSink = document.getElementById('liveTranscript');
+const transcriptContainer = document.getElementById('transcript-container');
+const answerBox = document.querySelector('.answer-box');
 window.__useGroqFastMode = true;
+// collapse transcript/answer until user interacts
+if (transcriptContainer) transcriptContainer.classList.add('panel-collapsed');
+if (answerBox) answerBox.classList.add('panel-collapsed');
+
+function revealPanels() {
+  transcriptContainer?.classList.remove('panel-collapsed');
+  answerBox?.classList.remove('panel-collapsed');
+}
+// In case there is prefilled content (restored state), reveal on load
+document.addEventListener('DOMContentLoaded', () => {
+  const transcriptHasText = (transcriptSink?.value || '').trim().length > 0;
+  const answerHasChildren = !!document.getElementById('liveAnswer')?.children.length;
+  if (transcriptHasText || answerHasChildren) revealPanels();
+});
 
 // --- Harden transcript as display-only (no typing/paste/drop) ---
 function hardenTranscript(el) {
@@ -65,6 +85,7 @@ function _appendTranscript(line, cls) {
 // --- Answer log helper (Phase 6.3) ---
 // --- Answer log helper (safe for any payload) ---
 function appendAnswerBlock(text) {
+  revealPanels();
   const container = document.getElementById('liveAnswer');
   if (!container) {
     console.error('[answer] #liveAnswer not found in DOM');
@@ -96,6 +117,11 @@ function appendAnswerBlock(text) {
 
   entry.innerHTML = body;
   container.appendChild(entry);
+  const sep = document.createElement('div');
+  sep.className = 'answer-separator';
+  sep.textContent = 'End of response';
+  container.appendChild(sep);
+  // keep view pinned to newest content
   container.scrollTop = container.scrollHeight;
 }
 
@@ -331,6 +357,7 @@ function isStatusyBanner(t) {
     const key = t.dataset.tab;
     const target = panels[key] || panels.live;
     if (target) target.classList.add('show');
+    if (key === 'live') revealPanels();
   }));
 })();
 
@@ -366,6 +393,7 @@ function _ensureTrailingNewline(el){
 }
 
 function appendTranscriptLine(line) {
+  revealPanels();
   const box = document.getElementById("transcript");
   if (!box) return;
 
@@ -692,13 +720,24 @@ on(docBadge, 'click', async () => {
 on(chatInput, 'keydown', (e) => {
   if (e.key === 'Enter') {
     const val = chatInput.value.trim();
-    if (val) unifiedAsk(val);
+    if (val) {
+      revealPanels();
+      unifiedAsk(val);
+    }
     chatInput.value = "";
   }
 });
+// Reveal panels as soon as the user starts typing or focuses the box
+on(chatInput, 'input', () => {
+  if (chatInput.value.trim().length > 0) revealPanels();
+});
+on(chatInput, 'focus', () => revealPanels());
 on(chatSend, 'click', () => {
   const val = chatInput.value.trim();
-  if (val) unifiedAsk(val);
+  if (val) {
+    revealPanels();
+    unifiedAsk(val);
+  }
   chatInput.value = "";
 });
 
@@ -888,3 +927,4 @@ window.electron.on("trigger:end-session", () => {
   sendSessionSummary();
 });
 
+});
