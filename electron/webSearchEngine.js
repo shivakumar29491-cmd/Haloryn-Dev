@@ -1,5 +1,5 @@
 // =====================================================
-// HaloAI — webSearchEngine.js (multi-engine search API layer)
+// Haloryn — webSearchEngine.js (multi-engine search API layer)
 // =====================================================
 
 const fetch   = require('node-fetch');
@@ -199,3 +199,4 @@ module.exports = {
   duckDuckGoSearch,   // legacy usage
   fetchAndExtract      // legacy usage
 };
+

@@ -1,8 +1,8 @@
 {
-  "name": "haloai",
+  "name": "haloryn",
   "version": "0.0.3",
   "main": "electron/main.js",
-  "productName": "HaloAI",
+  "productName": "Haloryn",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win",
@@ -25,8 +25,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.imsk.haloai",
-    "productName": "HaloAI",
+    "appId": "com.imsk.haloryn",
+    "productName": "Haloryn",
     "asar": true,
     "asarUnpack": [
       "node_modules/sharp/**"

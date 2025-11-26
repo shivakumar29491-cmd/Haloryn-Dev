@@ -1,5 +1,5 @@
 // =====================================================
-// HaloAI — qaEngine.js (Phase 8 Final)
+// Haloryn — qaEngine.js (Phase 8 Final)
 // Unified QA / Doc / Web Logic — NO LOCAL LLM
 // =====================================================
 
@@ -154,3 +154,4 @@ module.exports = {
   setDocContext,
   answer
 };
+

@@ -426,7 +426,7 @@ on(screenReadBtn, "click", async () => {
     screenReadBtn.classList.add("active");
     setState("screen: capturing…");
 
-    // 1) Minimize HaloAI immediately
+    // 1) Minimize Haloryn immediately
     window.windowCtl?.minimize();
 
     // 2) Launch Snipping Tool (handled in main.js)
@@ -874,7 +874,7 @@ const fallback = await window.electron.invoke("search:router", {
   }
 }
 // ==============================================
-//  SESSION SUMMARY COLLECTOR  (HaloNex Summary)
+//  SESSION SUMMARY COLLECTOR  (Haloryn Summary)
 // ==============================================
 
 // Track session start
@@ -935,3 +935,5 @@ window.electron.on("trigger:end-session", () => {
 });
 
 });
+
+

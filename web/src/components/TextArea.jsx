@@ -27,7 +27,7 @@ export default function TextArea({ useAsk }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKey}
-        placeholder="Ask HaloAI anything…"
+        placeholder="Ask Haloryn anything…"
         className="flex-1 bg-transparent outline-none resize-none text-white placeholder-white/40"
       />
 
@@ -41,3 +41,4 @@ export default function TextArea({ useAsk }) {
     </div>
   );
 }
+

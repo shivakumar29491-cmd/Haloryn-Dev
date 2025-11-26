@@ -13,7 +13,7 @@ async function serpapiSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
   try {
     const res = await fetch(url, {
       timeout: timeoutMs,
-      headers: { 'User-Agent': 'HaloAI/1.0' }
+      headers: { 'User-Agent': 'Haloryn/1.0' }
     });
 
     if (!res.ok) return [];
@@ -32,3 +32,4 @@ async function serpapiSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
 }
 
 module.exports = { serpapiSearch };
+

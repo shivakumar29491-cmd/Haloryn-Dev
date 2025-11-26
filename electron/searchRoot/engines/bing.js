@@ -16,7 +16,7 @@ async function bingSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
       timeout: timeoutMs,
       headers: {
         'Ocp-Apim-Subscription-Key': key,
-        'User-Agent': 'HaloAI/1.0'
+        'User-Agent': 'Haloryn/1.0'
       }
     });
 
@@ -40,3 +40,4 @@ async function bingSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
 }
 
 module.exports = { bingSearch };
+

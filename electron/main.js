@@ -1,47 +1,96 @@
 // =====================================================
-// HaloAI — main.js (Recorder + Whisper + Chat + Doc QA + Live Companion)
+// Haloryn — main.js (Recorder + Whisper + Chat + Doc QA + Live Companion)
 // Phase 5.11–5.15 updates included + Brave API wiring
 // =====================================================
-const path = require('path');
-// Load .env from electron/ folder and override any existing env so local paths win
-require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
+/*
+  © 2025 iMSK Consultants LLC — Haloryn AI
+  All Rights Reserved.
+*/
 
-const { app, BrowserWindow, ipcMain, dialog, globalShortcut } = require('electron');
-// FORCE Electron to use the electron/ folder as working directory
+// =====================================================
+// IMPORTS + ENV SETUP (CLEAN + NO DUPLICATES)
+// =====================================================
+
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env"), override: true });
+
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  globalShortcut,
+  clipboard
+} = require("electron");
+
 process.chdir(__dirname);
 
-const { spawn } = require('child_process');
-const fs   = require('fs');
-const os   = require('os');
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
-const { URL } = require('url');
-let pdfParse = null; // lazy-load for PDFs
+const { spawn, exec } = require("child_process");
+const fs = require("fs");
+const os = require("os");
+const fetch = require("node-fetch");
+const cheerio = require("cheerio");
+const { URL } = require("url");
+let pdfParse = null;
 const sharp = require("sharp");
-const { desktopCapturer } = require("electron");
 const Tesseract = require("tesseract.js");
+const { desktopCapturer } = require("electron");
+const http = require("http");
+
 const { triggerSnip } = require("./triggerSnip");
-const { clipboard } = require("electron");
-const { exec } = require("child_process");
-// --- Groq Fast Engines ---
+
+// Groq Engines
 const { groqWhisperTranscribe, groqFastAnswer } = require("./groqEngine");
-let lastSessionSummary = null;
-let isSessionActive = false;
 
-
-
-
+// Haloryn backend
 const backend = require("./api/index.js");
 const { router: smartSearch } = backend.search;
 const { providerSelector: getProviderStats } = backend.utils;
 const { braveApi: BraveApi } = backend.search;
-const { initScreenReader } = require('./screenReader');
+
+const { initScreenReader } = require("./screenReader");
+
+let lastSessionSummary = null;
+let isSessionActive = false;
+
 
 process.env.PATH = [
   'C:\\Program Files\\sox',
   'C:\\Program Files (x86)\\sox-14-4-2',
   process.env.PATH || ''
 ].join(';');
+/*
+  © 2025 iMSK Consultants LLC — Haloryn AI
+  All Rights Reserved.
+*/
+let mainWindow;
+const rendererRoot = path.join(__dirname, "renderer");
+let rendererServerPort = null;
+
+
+ipcMain.on("save-user-session", (event, data) => {
+  const sessionPath = path.join(app.getPath("userData"), "session.json");
+  fs.writeFileSync(sessionPath, JSON.stringify(data));
+});
+
+ipcMain.handle("get-user-session", () => {
+  const sessionPath = path.join(app.getPath("userData"), "session.json");
+  try {
+    return JSON.parse(fs.readFileSync(sessionPath));
+  } catch {
+    return {};
+  }
+});
+
+ipcMain.handle("load-activity", async () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
+    return true;
+  }
+  return false;
+});
+
+app.whenReady().then(createWindow);
 
 // ---------------- Window ----------------
 let win;
@@ -52,27 +101,106 @@ function send(ch, payload) {
     try { win.webContents.send(ch, payload); } catch {}
   }
 }
-app.setAppUserModelId("HaloNex");
+app.setAppUserModelId("Haloryn");
 process.chdir(__dirname);
 
-function createWindow() {
-  win = new BrowserWindow({
-    width: 1200,
-    height: 900,
-    minWidth: 1100,
-    minHeight: 780,
-    transparent: true,                 // <— allow window to be see-through
-    backgroundColor: '#00000000',      // <— fully transparent
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js")
-    },
-    frame: false,
-    titleBarStyle: "hiddenInset"
+function startRendererServer() {
+  if (rendererServerPort) return Promise.resolve(rendererServerPort);
+
+  const mimeTypes = {
+    ".html": "text/html",
+    ".js": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".svg": "image/svg+xml"
+  };
+
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      const urlPath = (req.url || "").split("?")[0] || "/";
+      const requestPath = urlPath === "/" ? "/login.html" : urlPath;
+
+      // Route /auth/* to electron/auth, /icons/* to electron/icons, otherwise renderer root
+      let baseRoot = rendererRoot;
+      let subPath = requestPath.replace(/^\/+/, ""); // strip leading slashes
+      if (subPath.startsWith("auth/")) {
+        baseRoot = path.join(__dirname, "auth");
+        subPath = subPath.slice("auth/".length);
+      } else if (subPath.startsWith("icons/")) {
+        baseRoot = path.join(__dirname, "icons");
+        subPath = subPath.slice("icons/".length);
+      }
+
+      const filePath = path.normalize(path.join(baseRoot, subPath));
+
+      if (!filePath.startsWith(baseRoot)) {
+        res.writeHead(403);
+        return res.end("Forbidden");
+      }
+
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          res.writeHead(404);
+          return res.end("Not found");
+        }
+        const mime = mimeTypes[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+        res.setHeader("Content-Type", mime);
+        res.end(data);
+      });
+    });
+
+    server.listen(0, "127.0.0.1", () => {
+      rendererServerPort = server.address().port;
+      resolve(rendererServerPort);
+    });
   });
-  win.loadFile(path.join(__dirname, "activityRoot.html"));
 }
 
 
+async function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 900,
+    minWidth: 1100,
+  minHeight: 780,
+  transparent: true,
+  backgroundColor: "#00000000",
+  frame: false,
+  titleBarStyle: "hiddenInset",
+  crossOriginOpenerPolicy: null,
+  crossOriginEmbedderPolicy: false,
+  webPreferences: {
+    preload: path.join(__dirname, "preload.js"),
+    contextIsolation: true,
+    nodeIntegration: false,
+    nativeWindowOpen: true,
+      sandbox: false
+    }
+  });
+
+win = mainWindow;
+
+
+  // USER SESSION CHECK
+  const sessionPath = path.join(app.getPath("userData"), "session.json");
+
+  let session = {};
+  try {
+    session = JSON.parse(fs.readFileSync(sessionPath));
+  } catch {}
+
+  // IF NOT LOGGED IN → SHOW LOGIN PAGE
+  if (!session.verified) {
+    const port = await startRendererServer();
+    mainWindow.loadURL(`http://127.0.0.1:${port}/login.html`);
+  } else {
+    // LOGGED IN → SHOW MAIN ACTIVITY DASHBOARD
+    mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
+  }
+}
 
 
 
@@ -344,7 +472,7 @@ async function openAIDocAnswer(question, text) {
     ? selectRelevantChunks(question, text, k).join('\n\n')
     : chunkText(text, 1400).slice(0, k).join('\n\n');
 
-  const sys = `You are HaloAI. Answer ONLY using the provided document.
+  const sys = `You are Haloryn. Answer ONLY using the provided document.
 If the document does not contain the answer, say "I couldn't find this in the document."
 Prefer concise bullets.`;
 
@@ -461,7 +589,7 @@ async function openAIHybridAnswer(question, text) {
     .map((s, i) => `[${i + 1}] ${s.sum} (source: ${s.url})`)
     .join('\n');
 
-  const sys = `You are HaloAI. Produce the BEST answer by combining the provided document with external knowledge snippets.
+  const sys = `You are Haloryn. Produce the BEST answer by combining the provided document with external knowledge snippets.
 Rules:
 - Be accurate and concise.
 - Prefer the document when it clearly answers; otherwise enrich with the web snippets.
@@ -708,7 +836,7 @@ async function genericAnswer(userText){
         temperature:0.6,
         max_tokens:700,
         messages:[
-          {role:'system',content:'You are HaloAI. Provide clear, direct answers.'},
+          {role:'system',content:'You are Haloryn. Provide clear, direct answers.'},
           {role:'user',content:userText}
         ]
       })
@@ -870,7 +998,7 @@ async function answer(userText) {
           temperature: 0.5,
           max_tokens: 300,
           messages: [
-            { role: "system", content: "You are HaloAI with cloud-only mode." },
+            { role: "system", content: "You are Haloryn with cloud-only mode." },
             { role: "user", content: q }
           ]
         })
@@ -977,7 +1105,7 @@ async function generateCompanionUpdate(kind = 'rolling') {
   const tx = live.transcript.trim();
   if (!tx) return;
 
-  const sys = `You are HaloAI Live Companion. Listen to a meeting/conversation transcript and provide:
+  const sys = `You are Haloryn Live Companion. Listen to a meeting/conversation transcript and provide:
 - A 2–4 line concise summary (no fluff)
 - Up to 5 action items with owners if mentioned
 - Helpful suggested prompts the user could say to you next
@@ -1377,7 +1505,7 @@ ipcMain.handle('window:restore', () => {
   if (win && win.isMinimized()) win.restore();
 });
 ipcMain.handle('env:get', ()=>({
-  APP_NAME: process.env.APP_NAME || 'HaloAI',
+  APP_NAME: process.env.APP_NAME || 'Haloryn',
   OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
   FALLBACK_MODEL: process.env.FALLBACK_MODEL || 'gpt-4o-mini'
 }));

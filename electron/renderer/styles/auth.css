@@ -1,0 +1,84 @@
+/*
+  (c) 2025 iMSK Consultants LLC - Haloryn AI
+  All Rights Reserved.
+*/
+-------------------------------------------------- */
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+  position: relative;
+  background: #05111a;
+}
+
+/* Full-screen logo background layer */
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(0, 186, 255, 0.18) 0%, rgba(5, 17, 26, 0.85) 60%, rgba(5, 17, 26, 1) 100%),
+    url("../../icons/haloryn.png") no-repeat center center;
+  background-size: cover, 78%;
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Vignette for soft edges */
+body::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center,
+      rgba(0, 0, 0, 0) 45%,
+      rgba(0, 0, 0, 0.5) 100%);
+  z-index: 0;
+}
+
+
+.box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  padding: 25px;
+  border-radius: 15px;
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(10px);
+  z-index: 1;
+  box-shadow: 0 14px 50px rgba(0, 0, 0, 0.45);
+}
+
+.box h2 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.box input, select, button {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+}
+
+button {
+  background: #0078ff;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.8;
+}
+
+a {
+  color: #0095ff;
+}

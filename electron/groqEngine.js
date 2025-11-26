@@ -1,6 +1,6 @@
 // -----------------------------------------------------------
 //  groqEngine.js — LLM Answer Engine (ROOT FOLDER)
-//  Phase 8 — use HaloAI Backend (Vercel)
+//  Phase 8 — use Haloryn Backend (Vercel)
 // -----------------------------------------------------------
 
 const fetch = require("node-fetch");
@@ -30,7 +30,7 @@ async function groqWhisperTranscribe(audioBuffer) {
 }
 
 // -----------------------------------------------------------
-// 2. FAST ANSWER — USE HALOAI BACKEND (NOT GROQ DIRECT)
+// 2. FAST ANSWER — USE Haloryn BACKEND (NOT GROQ DIRECT)
 // -----------------------------------------------------------
 async function groqFastAnswer(prompt, docContextText = '', docName = '') {
   let prefixed = prompt;
@@ -46,7 +46,7 @@ async function groqFastAnswer(prompt, docContextText = '', docName = '') {
   messages: [
     {
       role: "system",
-      content: "You are HaloAI. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
+      content: "You are Haloryn. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
     },
     { role: "user", content: prefixed }
   ],
@@ -72,3 +72,4 @@ module.exports = {
   groqWhisperTranscribe,
   groqFastAnswer
 };
+

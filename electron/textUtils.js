@@ -1,5 +1,5 @@
 // =====================================================
-// HaloAI — textUtils.js (tokenizing, chunking, summaries, intent)
+// Haloryn — textUtils.js (tokenizing, chunking, summaries, intent)
 // =====================================================
 
 // Stopword list (unchanged from main.js)
@@ -106,3 +106,4 @@ module.exports = {
   detectIntent,
   extractiveSummary
 };
+

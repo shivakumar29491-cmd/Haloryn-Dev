@@ -1,6 +1,6 @@
-# 🎧 HaloAI — Transcribe & Answer
+# 🎧 Haloryn — Transcribe & Answer
 
-**HaloAI** is a real-time desktop meeting assistant built with **Electron**, **Whisper.cpp**, and **OpenAI GPT**.  
+**Haloryn** is a real-time desktop meeting assistant built with **Electron**, **Whisper.cpp**, and **OpenAI GPT**.  
 It listens through your microphone 🎙️, transcribes live speech using Whisper, and generates intelligent responses using OpenAI models — all displayed beautifully in one simple interface.
 
 ---
@@ -32,5 +32,6 @@ It listens through your microphone 🎙️, transcribes live speech using Whispe
 
 ### 1️⃣ Clone this repository
 ```bash
-git clone https://github.com/shivakumar29491-cmd/HaloAI.git
-cd HaloAI
+git clone https://github.com/shivakumar29491-cmd/Haloryn.git
+cd Haloryn
+
