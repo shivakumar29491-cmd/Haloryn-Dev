@@ -1,0 +1,52 @@
+name: build-app
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: x64
+            platform: darwin
+            build_cmd: npm run build:mac
+          - os: windows-latest
+            arch: x64
+            platform: win32
+            build_cmd: npm run build:win
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild sharp for Electron
+        shell: bash
+        run: |
+          npm rebuild sharp \
+            --runtime=electron \
+            --target=30.5.1 \
+            --dist-url=https://electronjs.org/headers \
+            --platform=${{ matrix.platform }} \
+            --arch=${{ matrix.arch }}
+
+      - name: Build app
+        run: ${{ matrix.build_cmd }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/**
