@@ -43,10 +43,3 @@ contextBridge.exposeInMainWorld('companion', {
   onTranscript: (cb) => ipcRenderer.on('companion:transcript', (_, t) => cb(t)),
   onSuggestion: (cb) => ipcRenderer.on('companion:suggestion', (_, s) => cb(s))
 });
-
-// Expose auth/session helpers for renderer (login, skip login)
-contextBridge.exposeInMainWorld("electronAPI", {
-  saveUserSession: (data) => ipcRenderer.send("save-user-session", data),
-  getUserSession: () => ipcRenderer.invoke("get-user-session"),
-  loadActivity: () => ipcRenderer.invoke("load-activity")
-});

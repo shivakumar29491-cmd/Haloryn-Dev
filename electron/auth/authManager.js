@@ -45,45 +45,29 @@ export async function loginManual(email, password, sendTo, phone) {
 
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
-  try {
-    const cred = await signInWithPopup(auth, provider);
-    return cred.user;
-  } catch (err) {
-    // Only fall back to redirect for known popup issues; otherwise surface the error.
-    const code = err?.code || "";
-    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
-      await signInWithRedirect(auth, provider);
-      return null;
-    }
-    throw err;
-  }
+  const cred = await signInWithPopup(auth, provider);
+  return cred.user;
+}
+
+export async function loginGoogleRedirect() {
+  const provider = new GoogleAuthProvider();
+  await signInWithRedirect(auth, provider);
 }
 
 export async function resolveRedirectLogin() {
-  try {
-    const result = await getRedirectResult(auth);
-    return result?.user || null;
-  } catch (err) {
-    // Ignore "no auth event" noise; bubble up anything else for logging.
-    if (err?.code === "auth/no-auth-event") return null;
-    throw err;
-  }
+  const result = await getRedirectResult(auth);
+  return result?.user || null;
 }
 
 export async function loginFacebook() {
   const provider = new FacebookAuthProvider();
-  try {
-    const cred = await signInWithPopup(auth, provider);
-    return cred.user;
-  } catch (err) {
-    // Only fall back to redirect for known popup issues; otherwise surface the error.
-    const code = err?.code || "";
-    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
-      await signInWithRedirect(auth, provider);
-      return null;
-    }
-    throw err;
-  }
+  const cred = await signInWithPopup(auth, provider);
+  return cred.user;
+}
+
+export async function loginFacebookRedirect() {
+  const provider = new FacebookAuthProvider();
+  await signInWithRedirect(auth, provider);
 }
 
 export async function verifyOtpFlow(type, payload) {

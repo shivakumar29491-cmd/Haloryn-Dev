@@ -4,10 +4,7 @@
 */
 import { initializeApp } from "firebase/app";
 import {
-  initializeAuth,
-  indexedDBLocalPersistence,
-  browserLocalPersistence,
-  browserPopupRedirectResolver,
+  getAuth,
   RecaptchaVerifier,
   signInWithPhoneNumber,
   signInWithEmailAndPassword,
@@ -31,11 +28,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// Use initializeAuth so we can control persistence and the popup resolver in Electron.
-const auth = initializeAuth(app, {
-  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-  popupRedirectResolver: browserPopupRedirectResolver
-});
+const auth = getAuth(app);
 const db = getFirestore(app);
 
 export {

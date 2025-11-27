@@ -1,8 +1,6 @@
 # Ignore build output
 dist/
 dist/**
-dist-fresh*/
-dist-fresh*/**
 win-unpacked/
 win-unpacked/**
 

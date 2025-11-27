@@ -16,6 +16,7 @@ function getGroqClient() {
     console.error("Missing GROQ_API_KEY. Add it to your environment or .env file.");
     return null;
   }
+
   groqClient = new Groq({ apiKey });
   return groqClient;
 }
@@ -32,7 +33,7 @@ async function groqWhisperTranscribe(audioBuffer) {
       file: {
         name: "audio.wav",
         mimeType: "audio/wav",
-        buffer: audioBuffer,
+        buffer: audioBuffer
       },
       model: "whisper-large-v3"
     });
