@@ -38,7 +38,16 @@
       "output": "dist"
     },
     "files": [
-      "**/*"
+      "electron/**",
+      "node_modules/**",
+      "package.json",
+      "package-lock.json",
+      "!**/__tests__/**",
+      "!coverage/**",
+      "!.github/**",
+      "!web/**",
+      "!dist*/**",
+      "!build/**"
     ],
     "win": {
       "target": "nsis",
