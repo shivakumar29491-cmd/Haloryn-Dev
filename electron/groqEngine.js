@@ -9,9 +9,25 @@ const fetch = require("node-fetch");
 // 1. GROQ WHISPER TRANSCRIPTION  (via direct Groq API)
 // -----------------------------------------------------------
 const Groq = require("groq-sdk");
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+let groqClient = null;
+function getGroqClient() {
+  if (groqClient) return groqClient;
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    console.error("Missing GROQ_API_KEY. Add it to your environment or .env file.");
+    return null;
+  }
+
+  groqClient = new Groq({ apiKey });
+  return groqClient;
+}
 
 async function groqWhisperTranscribe(audioBuffer) {
+  const groq = getGroqClient();
+  if (!groq) return "";
+
   try {
     const response = await groq.audio.transcriptions.create({
       file: {
@@ -33,6 +49,9 @@ async function groqWhisperTranscribe(audioBuffer) {
 // 2. FAST ANSWER — USE Haloryn BACKEND (NOT GROQ DIRECT)
 // -----------------------------------------------------------
 async function groqFastAnswer(prompt, docContextText = '', docName = '') {
+  const groq = getGroqClient();
+  if (!groq) return "";
+
   let prefixed = prompt;
   if (docContextText) {
     // Keep doc context short but present to steer Groq toward the attached file
@@ -72,4 +91,3 @@ module.exports = {
   groqWhisperTranscribe,
   groqFastAnswer
 };
-
