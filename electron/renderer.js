@@ -385,6 +385,9 @@ const userChip = $('#userChip');
 const userName = $('#userName');
 const userProvider = $('#userProvider');
 const chrome = document.querySelector('.window-chrome');
+const userMenu = document.getElementById("userMenu");
+const menuAccount = document.getElementById("menuAccount");
+const menuSignout = document.getElementById("menuSignout");
 
 
 
@@ -510,6 +513,7 @@ async function hydrateUserChip() {
       userName.textContent = display;
       userProvider.textContent = provider || "";
       userChip.classList.remove("hidden");
+      if (menuAccount) menuAccount.textContent = `${display}${provider ? " • " + provider : ""}`;
     } else {
       userChip.classList.add("hidden");
     }
@@ -519,14 +523,39 @@ async function hydrateUserChip() {
 }
 hydrateUserChip();
 
+function toggleUserMenu(show) {
+  if (!userMenu) return;
+  const next = show ?? userMenu.classList.contains("hidden");
+  if (next) userMenu.classList.remove("hidden"); else userMenu.classList.add("hidden");
+}
+
 on(userChip, "click", async () => {
+  toggleUserMenu(true);
+});
+
+on(menuAccount, "click", async () => {
+  toggleUserMenu(false);
   try {
-    await window.electron.invoke("logout:clear");
+    await window.electron?.invoke?.("load-user-info");
+  } catch (e) {
+    appendLog(`[user] account load failed: ${e.message}`);
+  }
+});
+
+on(menuSignout, "click", async () => {
+  toggleUserMenu(false);
+  try {
+    await window.electron.invoke("logout");
   } catch (e) {
     appendLog(`[user] logout failed: ${e.message}`);
   }
 });
 
+document.addEventListener("click", (e) => {
+  if (!userMenu || userMenu.classList.contains("hidden")) return;
+  if (userMenu.contains(e.target) || userChip?.contains(e.target)) return;
+  toggleUserMenu(false);
+});
 
 //--------------------------------------------------
 // HANDLE OCR TEXT RETURNED FROM main.js

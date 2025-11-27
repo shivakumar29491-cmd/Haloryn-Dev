@@ -101,27 +101,6 @@ button,input,select,textarea{font:inherit;color:var(--text)}
 }
 .brand-title-inline{font-weight:700;font-size:14px;letter-spacing:.3px;}
 .brand-caption-inline{font-size:11px;color:var(--muted);}
-.user-chip{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 10px;
-  border:1px solid rgba(130,170,255,.25);
-  border-radius:12px;
-  background:rgba(15,24,48,.35);
-  -webkit-app-region:no-drag;
-  cursor:pointer;
-}
-.user-chip .user-avatar{
-  width:28px;height:28px;border-radius:8px;
-  background:rgba(58,134,255,.25);
-  display:flex;align-items:center;justify-content:center;
-  font-size:14px;
-}
-.user-chip .user-meta{display:flex;flex-direction:column;line-height:1.1;}
-.user-chip .user-name{font-weight:600;font-size:12px;}
-.user-chip .user-provider{font-size:10px;color:var(--muted);}
-.user-chip.hidden{display:none!important;}
 .window-chrome.glass{
   background:rgba(15,21,34,.55);
   backdrop-filter:blur(14px) saturate(120%);

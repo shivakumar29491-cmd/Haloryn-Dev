@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Account Info</title>
+  <style>
+    body { margin:0; padding:20px; font-family: system-ui, Arial, sans-serif; background:#101726; color:#dbe7ff; }
+    .card { background:rgba(20,26,42,.6); border:1px solid rgba(130,170,255,.25); border-radius:12px; padding:16px; max-width:420px; }
+    .row { margin:8px 0; }
+    .label { color:#9ab0d0; font-size:12px; }
+    .value { font-size:15px; font-weight:600; }
+    button { margin-top:14px; padding:8px 14px; border-radius:10px; border:1px solid rgba(130,170,255,.35); background:rgba(58,134,255,.2); color:#dbe7ff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h3>Account</h3>
+    <div class="row"><div class="label">Name</div><div class="value" id="infoName"></div></div>
+    <div class="row"><div class="label">Email</div><div class="value" id="infoEmail"></div></div>
+    <div class="row"><div class="label">Phone</div><div class="value" id="infoPhone"></div></div>
+    <button id="backBtn">Back</button>
+  </div>
+  <script>
+    (async () => {
+      try {
+        const session = await window.electronAPI?.getUserSession?.();
+        document.getElementById("infoName").textContent = session?.displayName || "(none)";
+        document.getElementById("infoEmail").textContent = session?.email || "(none)";
+        document.getElementById("infoPhone").textContent = session?.phone || "(none)";
+      } catch {}
+    })();
+    document.getElementById("backBtn").onclick = () => {
+      window.history.back();
+    };
+  </script>
+</body>
+</html>

@@ -1,5 +1,12 @@
 const startBtn = document.getElementById("startSessionBtn");
 const cards = Array.from(document.querySelectorAll(".card"));
+const heroUserName = document.getElementById("heroUserName");
+const heroUserMeta = document.getElementById("heroUserMeta");
+const welcomeLine = document.getElementById("welcomeLine");
+const activityUserChip = document.getElementById("activityUserChip");
+const activityUserMenu = document.getElementById("activityUserMenu");
+const activityAccount = document.getElementById("activityAccount");
+const activitySignout = document.getElementById("activitySignout");
 
 function startSession() {
   const wrapper = document.getElementById("activityWrapper");
@@ -56,3 +63,47 @@ async function loadHistory() {
 }
 
 window.addEventListener("DOMContentLoaded", loadHistory);
+
+// Populate hero user info
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const session = await window.electronAPI?.getUserSession?.();
+    const name = session?.displayName || session?.email || "User";
+    const meta = session?.email || session?.phone || session?.provider || "";
+    if (heroUserName) heroUserName.textContent = name;
+    if (heroUserMeta) heroUserMeta.textContent = meta;
+    if (welcomeLine) welcomeLine.textContent = `Welcome back, ${name}`;
+    if (activityAccount) activityAccount.textContent = `Account (${name})`;
+  } catch {}
+});
+
+function toggleActivityMenu(show) {
+  if (!activityUserMenu) return;
+  const next = show ?? activityUserMenu.classList.contains("hidden");
+  if (next) activityUserMenu.classList.remove("hidden");
+  else activityUserMenu.classList.add("hidden");
+}
+
+if (activityUserChip) {
+  activityUserChip.addEventListener("click", () => toggleActivityMenu(true));
+}
+
+if (activitySignout) {
+  activitySignout.addEventListener("click", async () => {
+    toggleActivityMenu(false);
+    try { await window.electron?.invoke?.("logout"); } catch {}
+  });
+}
+
+if (activityAccount) {
+  activityAccount.addEventListener("click", async () => {
+    toggleActivityMenu(false);
+    try { await window.electron?.invoke?.("load-user-info"); } catch {}
+  });
+}
+
+document.addEventListener("click", (e) => {
+  if (!activityUserMenu || activityUserMenu.classList.contains("hidden")) return;
+  if (activityUserMenu.contains(e.target) || activityUserChip?.contains(e.target)) return;
+  toggleActivityMenu(false);
+});

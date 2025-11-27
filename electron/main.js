@@ -1343,6 +1343,28 @@ ipcMain.handle("summary:show-entry", async (_e, summary) => {
 ipcMain.handle("activity:history", () => {
   return readActivityHistory();
 });
+ipcMain.handle("logout", async () => {
+  const sessionPath = path.join(app.getPath("userData"), "session.json");
+  try { fs.writeFileSync(sessionPath, "{}"); } catch {}
+  isSessionActive = false;
+  try {
+    const port = await startRendererServer();
+    if (win && !win.isDestroyed()) {
+      await win.loadURL(`http://127.0.0.1:${port}/login.html`);
+      return { ok: true };
+    }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+  return { ok: false, error: "window unavailable" };
+});
+ipcMain.handle("load-user-info", async () => {
+  if (win && !win.isDestroyed()) {
+    await win.loadFile(path.join(__dirname, "userInfo.html"));
+    return { ok: true };
+  }
+  return { ok: false, error: "window unavailable" };
+});
 
 
 // Mirror handlers for Companion overlay API (used by preload.js)

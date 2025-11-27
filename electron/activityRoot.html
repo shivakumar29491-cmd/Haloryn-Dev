@@ -11,11 +11,30 @@
 <body>
   <div id="activityWrapper" class="activity-wrapper">
 
-    <!-- HERO LOGO -->
-    <div class="hero">
-      <img src="./icons/haloryn.png" class="hero-logo" />
-      <h2 class="hero-title">Welcome back, Shiva</h2>
-      <p class="hero-subtitle">Here’s your Haloryn activity timeline</p>
+    <!-- HERO -->
+    <div class="activity-hero">
+      <div class="hero-content">
+        <div class="hero-left">
+          <h2 class="hero-title">Activity Timeline</h2>
+          <p class="hero-subtitle" id="welcomeLine">Welcome back</p>
+        </div>
+        <div class="hero-actions">
+          <button id="startSessionBtn" class="start-btn hero-start">Start Session</button>
+          <div class="hero-user-wrapper">
+            <button class="hero-user-chip" id="activityUserChip">
+              <div class="chip-text">
+                <div class="hero-user-name" id="heroUserName"></div>
+                <div class="hero-user-meta" id="heroUserMeta"></div>
+              </div>
+              <span class="chip-chevron">▾</span>
+            </button>
+            <div class="hero-user-menu hidden" id="activityUserMenu">
+              <div class="menu-item" id="activityAccount">Account</div>
+              <div class="menu-item" id="activitySignout">Sign out</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- QUICK ACTION CARDS (only Recent Chats) -->
@@ -34,9 +53,6 @@
       <h3>Older</h3>
       <div id="timeline-older" class="timeline-section"></div>
     </div>
-
-    <!-- START SESSION BUTTON -->
-    <button id="startSessionBtn" class="start-btn">Start Session</button>
 
   </div>
 
