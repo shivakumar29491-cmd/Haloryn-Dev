@@ -4,9 +4,25 @@
 // =====================================================
 
 const Groq = require("groq-sdk");
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+let groqClient = null;
+function getGroqClient() {
+  if (groqClient) return groqClient;
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    console.error("Missing GROQ_API_KEY. Set it to enable Groq search results.");
+    return null;
+  }
+
+  groqClient = new Groq({ apiKey });
+  return groqClient;
+}
 
 async function groqSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
+  const groq = getGroqClient();
+  if (!groq) return [];
+
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

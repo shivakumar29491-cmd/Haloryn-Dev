@@ -1,4 +1,4 @@
-﻿/* RESET activity page styles completely */
+/* RESET activity page styles completely */
 /* Reset ONLY inside the live app panel, NOT global */
 :root, body {
   margin: 0;
@@ -22,13 +22,13 @@
 }
 
 .app-surface {
-  height: 100vh;
+  min-height: 100vh;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   background: transparent;   /* was the dark gradient */
-  overflow: hidden;          /* keep the window sized to viewport */
+  overflow: auto;
 }
 
 
@@ -56,71 +56,20 @@ button,input,select,textarea{font:inherit;color:var(--text)}
 
 /* Chrome */
 .window-chrome{
-  min-height:44px;
-  height:auto;
-  border-bottom:1px solid var(--border);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding:4px 12px;
-  -webkit-app-region:drag;
+  height:40px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 10px;-webkit-app-region:drag
 }
-
-
-.chrome-right{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  margin-left:auto;
-}
-.window-chrome .title{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  margin-right:auto;
-}
-.brand-inline{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding-left:4px;
-}
-
-
-.brand-logo-inline{
-  width:26px;
-  height:26px;
-  border-radius:7px;
-  box-shadow:0 6px 12px rgba(0,0,0,.2);
-}
-.brand-text-inline{
-  display:flex;
-  flex-direction:column;
-  line-height:1.1;
-}
-.brand-title-inline{font-weight:700;font-size:14px;letter-spacing:.3px;}
-.brand-caption-inline{font-size:11px;color:var(--muted);}
 .window-chrome.glass{
-  background:rgba(15,21,34,.55);
+  background:rgba(10,16,30,.35);
   backdrop-filter:blur(14px) saturate(120%);
-  box-shadow:0 12px 40px rgba(0,0,0,.28)
-}
-.window-chrome.incognito{
-  background:rgba(15,21,34,.8);
+  box-shadow:0 6px 30px rgba(0,0,0,.25)
 }
 .win-buttons button{
-  -webkit-app-region:no-drag;width:34px;height:30px;margin-left:10px;
-  border:1px solid rgba(130,170,255,.35);background:rgba(21,32,57,.45);
-  color:var(--text);border-radius:12px;cursor:pointer;backdrop-filter:blur(8px);
-  font-weight:700;letter-spacing:.5px;box-shadow:0 6px 16px rgba(0,0,0,.25)
+  -webkit-app-region:no-drag;width:28px;height:28px;margin-left:8px;
+  border:1px solid var(--border);background:rgba(21,32,57,.45);
+  color:var(--muted);border-radius:10px;cursor:pointer;backdrop-filter:blur(8px)
 }
-.win-buttons{
-  display:flex;
-  align-items:center;
-  align-self:center;   /* ← FIX */
-}
-
 .win-buttons button:hover{background:rgba(26,39,70,.55)}
 .title{opacity:.9;font-weight:600}
 
@@ -138,17 +87,10 @@ button,input,select,textarea{font:inherit;color:var(--text)}
   border:1px solid var(--border);padding:8px 12px;border-radius:12px;cursor:pointer;
   backdrop-filter:blur(8px)
 }
-.tab.live-tab{display:none!important}
 .tab.active{background:rgba(27,42,74,.6);color:var(--text)}
 
 .panel{display:none;padding:12px}
-.panel.show{
-  display:flex;
-  flex:1;
-  flex-direction:column;
-  min-height:0;         /* allow inner scroll instead of stretching window */
-  overflow:hidden;
-}
+.panel.show{display:block}
 
 /* Live controls + search mode */
 .live-controls{
@@ -176,42 +118,15 @@ button{
   border-radius:12px;padding:8px 12px;cursor:pointer;color:var(--text);
   backdrop-filter:blur(8px)
 }
-.icon-btn{
-  font-family: "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;
-}
-.mic-btn{
-  width:38px;
-  height:38px;
-  border-radius:12px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:0 8px;
-}
 button.primary{background:var(--accent);border-color:transparent;color:#fff}
 button.ghost{background:transparent;border-color:var(--border);color:var(--muted)}
 button:hover{filter:brightness(1.1)}
 .icon-btn{width:36px;height:32px;border-radius:8px}
-#incognitoToggle.icon-only{
-  width:34px;height:34px;border-radius:18px;padding:0 6px;
-  display:flex;align-items:center;justify-content:center;font-size:16px;
-  border:1px solid rgba(130,170,255,.35);
-}
-#incognitoToggle.active{
-  color:var(--accent);border-color:var(--accent);background:rgba(58,134,255,.12);
-  box-shadow:0 6px 16px rgba(58,134,255,.25);
-}
 .state{margin-left:8px;color:#82aaff;font-weight:600}
-#incognitoToggle.active{color:var(--accent);border-color:var(--accent)}
 
 .glass{
   background:var(--panel);border:1px solid var(--border);
-  border-radius:12px;padding:10px;
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  min-height:0;
-  overflow:hidden;      /* keep the panel inside viewport */
+  border-radius:12px;padding:10px
 }
 
 /* Chat */
@@ -242,7 +157,6 @@ button:hover{filter:brightness(1.1)}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05)
 }
 .bubble.user{margin-left:auto;background:rgba(58,134,255,.25)}
-.incognito .app-surface{opacity:.82;}
 .bubble.ai{margin-right:auto;background:rgba(18,24,40,.45)}
 .bubble.tx{margin-right:auto;background:rgba(20,140,90,.18);border-style:dashed}
 .bubble.tx .meta{opacity:.75;font-size:12px;margin-bottom:4px}
@@ -294,8 +208,6 @@ button:hover{filter:brightness(1.1)}
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex:1;
-  min-height:0;   /* allow the answer container to scroll instead of expanding */
 }
 .answer-log {
   width: 100%;
@@ -319,9 +231,7 @@ button:hover{filter:brightness(1.1)}
   padding: 10px;
   backdrop-filter: blur(10px);
   overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  max-height: none; /* let flex control height within viewport */
+  max-height: 65vh; /* taller scrollable area */
 }
 .answer-content {
   display: flex;
@@ -498,6 +408,26 @@ button.recording,
   font-size:12px;
   color:var(--muted);
 }
+.pill-toggle {
+  border: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.8;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f0;
+  transition: background 0.15s, opacity 0.15s, transform 0.1s;
+}
+.pill-toggle:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+.pill-toggle.active {
+  background: #ffb347;
+  color: #121212;
+  opacity: 1;
+}
 .api-usage-box {
   font-family: "JetBrains Mono", Consolas, monospace;
   font-size: 11px;
@@ -516,19 +446,12 @@ button.recording,
   position: relative;
   z-index: 10;
   pointer-events: auto;
-  flex: 1;
 }
 
 /* Chat row must stay above transcript */
 .chat-row {
   position: relative;
   z-index: 9;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.chat-row button{
-  flex-shrink: 0;
 }
 
 /* Transcript stays behind */
@@ -542,5 +465,4 @@ button.recording,
   position: relative;
   z-index: 1;
 }
-
 

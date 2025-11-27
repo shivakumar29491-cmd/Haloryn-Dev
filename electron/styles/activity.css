@@ -12,100 +12,29 @@ body {
   animation: fadeIn 0.4s ease-out;
 }
 
-/* Hero */
-.activity-hero {
-  position: relative;
-  padding: 16px 18px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(26,32,48,0.75), rgba(16,22,34,0.7));
-  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
-  margin-bottom: 18px;
-  overflow: visible;
+/* Hero Section */
+.hero {
+  text-align: center;
+  margin-top: 20px;
 }
-.activity-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: url("../icons/haloryn.png") center/55% no-repeat;
-  opacity: 0.06;
-  pointer-events: none;
+
+.hero-logo {
+  width: 160px;
+  opacity: 0.95;
 }
-.hero-content {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  z-index: 1;
-}
-.hero-left .hero-title {
-  margin: 0 0 4px 0;
-  font-size: 18px;
+
+.hero-title {
+  margin: 10px 0 5px;
+  font-size: 24px;
   font-weight: 700;
+  letter-spacing: 0.5px;
 }
-.hero-left .hero-subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: #b7c6e0;
+
+.hero-subtitle {
+  font-size: 14px;
+  opacity: 0.8;
+  margin-bottom: 30px;
 }
-.hero-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.hero-start {
-  margin: 0;
-}
-.hero-user-wrapper {
-  position: relative;
-}
-.hero-user-chip{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 10px;
-  background:rgba(12,18,34,0.7);
-  border:1px solid rgba(130,170,255,0.3);
-  border-radius:12px;
-  color:#dbe7ff;
-  cursor:pointer;
-  box-shadow:0 8px 18px rgba(0,0,0,0.25);
-}
-.hero-user-chip .chip-text{
-  display:flex;
-  flex-direction:column;
-  max-width:200px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-.hero-user-name {
-  font-weight: 700;
-  font-size: 13px;
-}
-.hero-user-meta {
-  font-size: 11px;
-  color: #b7c6e0;
-}
-.chip-chevron{font-size:11px;color:#b7c6e0;}
-.hero-user-menu{
-  position:absolute;
-  top:calc(100% + 6px);
-  right:0;
-  min-width:140px;
-  background:rgba(10,16,30,0.95);
-  border:1px solid rgba(130,170,255,0.25);
-  border-radius:10px;
-  box-shadow:0 12px 24px rgba(0,0,0,0.3);
-  z-index:50;
-}
-.hero-user-menu.hidden{display:none;}
-.hero-user-menu .menu-item{
-  padding:8px 10px;
-  font-size:12px;
-  cursor:pointer;
-}
-.hero-user-menu .menu-item:hover{background:rgba(58,134,255,0.12);}
 
 /* Cards */
 .card-row {
@@ -175,6 +104,3 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
-.timeline-item { padding: 6px 0; color: #dbe7ff; font-size: 13px; }
-.timeline a { color: #dbe7ff; }
