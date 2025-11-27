@@ -40,7 +40,8 @@
     "productName": "Haloryn",
     "asar": true,
     "asarUnpack": [
-      "node_modules/sharp/**"
+      "node_modules/sharp/**",
+      "node_modules/@img/**"
     ],
     "npmRebuild": true,
     "forceCodeSigning": false,
