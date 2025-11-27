@@ -78,16 +78,3 @@ body {
   color: #fff;
   cursor: pointer;
 }
-
-
-.detail {
-  margin-top: 24px;
-}
-.detail.hidden { display: none; }
-.detail-block { background: rgba(18,24,40,0.45); border: 1px solid rgba(130,170,255,.25); border-radius: 12px; padding: 12px; min-height: 160px; }
-.detail-block h4 { margin: 0 0 8px 0; font-size: 14px; }
-.detail-block pre { white-space: pre-wrap; margin: 0; font-size: 12px; line-height: 1.4; }
-.transcript-lines { white-space: pre-wrap; font-size: 13px; line-height: 1.45; }
-.pair-line { margin: 4px 0; }
-.pair-line .label { color: #9ab0d0; font-weight: 700; margin-right: 6px; }
-.pair-line .pair-text { color: #dbe7ff; }

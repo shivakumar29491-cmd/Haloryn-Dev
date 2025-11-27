@@ -11,8 +11,21 @@
 // IMPORTS + ENV SETUP (CLEAN + NO DUPLICATES)
 // =====================================================
 
+const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, ".env"), override: true });
+const dotenv = require("dotenv");
+
+// Try multiple .env locations so packaged builds still pick up secrets
+const envPaths = [];
+if (process.resourcesPath) envPaths.push(path.join(process.resourcesPath, ".env"));
+envPaths.push(path.join(__dirname, ".env"), path.join(__dirname, "..", ".env"));
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: true });
+    break;
+  }
+}
 
 const {
   app,
@@ -20,13 +33,12 @@ const {
   ipcMain,
   dialog,
   globalShortcut,
-  clipboard,
-  Tray,
-  nativeImage
+  clipboard
 } = require("electron");
 
+process.chdir(__dirname);
+
 const { spawn, exec } = require("child_process");
-const fs = require("fs");
 const os = require("os");
 const fetch = require("node-fetch");
 const cheerio = require("cheerio");
@@ -53,13 +65,6 @@ const { initScreenReader } = require("./screenReader");
 let lastSessionSummary = null;
 let isSessionActive = false;
 
-// Icon paths
-const halorynIconPath = path.join(__dirname, "icons", "haloryn-256.png");
-const trayIconPath = path.join(__dirname, "icons", "haloryn-32.png");
-const incognitoHotkey = "CommandOrControl+Shift+I";
-const userDataPath = path.join(os.tmpdir(), "haloryn-user");
-const historyPath = path.join(userDataPath, "activityHistory.json");
-
 
 process.env.PATH = [
   'C:\\Program Files\\sox',
@@ -73,32 +78,6 @@ process.env.PATH = [
 let mainWindow;
 const rendererRoot = path.join(__dirname, "renderer");
 let rendererServerPort = null;
-let tray = null;
-let incognitoOn = false;
-function readActivityHistory() {
-  try {
-    return JSON.parse(fs.readFileSync(historyPath, "utf8"));
-  } catch {
-    return [];
-  }
-}
-
-function appendActivityHistory(entry) {
-  try {
-    const history = readActivityHistory();
-    history.unshift(entry);
-    const trimmed = history.slice(0, 100);
-    fs.writeFileSync(historyPath, JSON.stringify(trimmed, null, 2));
-  } catch (e) {
-    console.warn("[history] write failed", e?.message);
-  }
-}
-
-// Force Electron to use a writable temp directory and avoid disk cache errors
-try { app.setPath("userData", userDataPath); } catch {}
-try { app.commandLine.appendSwitch("disable-http-cache"); } catch {}
-try { app.commandLine.appendSwitch("disable-gpu"); } catch {}
-try { app.commandLine.appendSwitch("disable-gpu-compositing"); } catch {}
 
 
 ipcMain.on("save-user-session", (event, data) => {
@@ -117,13 +96,13 @@ ipcMain.handle("get-user-session", () => {
 
 ipcMain.handle("load-activity", async () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    console.log("load-activity IPC received, navigating to activityRoot.html");
     await mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
     return true;
   }
-  console.warn("load-activity IPC failed: no mainWindow");
   return false;
 });
+
+app.whenReady().then(createWindow);
 
 // ---------------- Window ----------------
 let win;
@@ -135,6 +114,7 @@ function send(ch, payload) {
   }
 }
 app.setAppUserModelId("Haloryn");
+process.chdir(__dirname);
 
 function startRendererServer() {
   if (rendererServerPort) return Promise.resolve(rendererServerPort);
@@ -191,99 +171,47 @@ function startRendererServer() {
   });
 }
 
-function ensureTray() {
-  if (incognitoOn) return;
-  if (tray && !tray.isDestroyed?.()) return tray;
-  try {
-    const icon = nativeImage.createFromPath(trayIconPath);
-    tray = new Tray(icon);
-    tray.setToolTip("Haloryn");
-    tray.on("click", () => {
-      if (win && !win.isDestroyed()) {
-        win.show();
-        win.focus();
-      }
-    });
-    return tray;
-  } catch (e) {
-    console.warn("[tray] failed to init", e);
-    tray = null;
-    return null;
-  }
-}
-
-function clearTray() {
-  try { tray?.destroy(); } catch {}
-  tray = null;
-}
-
-function applyIncognito(flag) {
-  incognitoOn = !!flag;
-  if (win && !win.isDestroyed()) {
-    try { win.setContentProtection(incognitoOn); } catch {}
-    try { win.setAlwaysOnTop(incognitoOn, "screen-saver"); } catch {}
-    try { win.setVisibleOnAllWorkspaces(true); } catch {}
-
-    if (incognitoOn) {
-      try { win.setSkipTaskbar(true); } catch {}
-      try { win.hide(); } catch {}
-      // Show without re-adding to taskbar (best effort on Windows)
-      setTimeout(() => {
-        try { win.showInactive(); } catch {}
-      }, 100);
-    } else {
-      try { win.setSkipTaskbar(false); } catch {}
-      try { win.setAlwaysOnTop(false); } catch {}
-      try { win.setVisibleOnAllWorkspaces(false); } catch {}
-      try { win.show(); win.focus(); } catch {}
-    }
-  }
-
-  if (incognitoOn) {
-    clearTray();
-    try { globalShortcut.register(incognitoHotkey, () => applyIncognito(false)); } catch {}
-  } else {
-    try { globalShortcut.unregister(incognitoHotkey); } catch {}
-    ensureTray();
-    if (win && !win.isDestroyed()) {
-      try { win.setSkipTaskbar(false); } catch {}
-      try { win.setContentProtection(false); } catch {}
-    }
-  }
-  return incognitoOn;
-}
-
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 900,
     minWidth: 1100,
-    minHeight: 780,
-    transparent: true,
-    backgroundColor: "#00000000",
-    frame: false,
-    titleBarStyle: "hiddenInset",
-    crossOriginOpenerPolicy: null,
-    crossOriginEmbedderPolicy: false,
-    icon: halorynIconPath,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      nativeWindowOpen: true,
+  minHeight: 780,
+  transparent: true,
+  backgroundColor: "#00000000",
+  frame: false,
+  titleBarStyle: "hiddenInset",
+  crossOriginOpenerPolicy: null,
+  crossOriginEmbedderPolicy: false,
+  webPreferences: {
+    preload: path.join(__dirname, "preload.js"),
+    contextIsolation: true,
+    nodeIntegration: false,
+    nativeWindowOpen: true,
       sandbox: false
     }
   });
 
 win = mainWindow;
-ensureTray();
-applyIncognito(false);
 
 
-  // Always land on login; app navigation happens after explicit login or test bypass
-  const port = await startRendererServer();
-  mainWindow.loadURL(`http://127.0.0.1:${port}/login.html`);
+  // USER SESSION CHECK
+  const sessionPath = path.join(app.getPath("userData"), "session.json");
+
+  let session = {};
+  try {
+    session = JSON.parse(fs.readFileSync(sessionPath));
+  } catch {}
+
+  // IF NOT LOGGED IN → SHOW LOGIN PAGE
+  if (!session.verified) {
+    const port = await startRendererServer();
+    mainWindow.loadURL(`http://127.0.0.1:${port}/login.html`);
+  } else {
+    // LOGGED IN → SHOW MAIN ACTIVITY DASHBOARD
+    mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
+  }
 }
 
 
@@ -306,9 +234,7 @@ function initSearchEngines() {
 
 app.whenReady().then(() => {
   initSearchEngines(); // NEW: wire Brave on boot
-  if (!mainWindow) {
-    createWindow();
-  }
+  createWindow();
   try {
     globalShortcut.register('CommandOrControl+Shift+Space', () => {
       if (!win) return;
@@ -964,6 +890,7 @@ async function genericAnswer(userText){
 async function answer(userText) {
   const q = (userText || '').trim();
   send("log", `[answer()] received prompt: ${q}`);
+  console.log("[answer()] received prompt:", q);
 
   if (!q) return '';
 
@@ -1174,7 +1101,7 @@ let live={on:false, idx:0, transcript:''};
 let pendingAnswerTimer = null;
 let pendingAnswerCtx = '';
 // Larger chunk reduces CPU churn; can be overridden via UI config
-let recConfig={device:'default', gainDb:'6', chunkMs:3200};
+let recConfig={device:'default', gainDb:'0', chunkMs:2000};
 
 // Live Companion state
 const companion = {
@@ -1276,9 +1203,9 @@ function startChunk(){
         if(normalized){
           // Append each recognized utterance as its own line (no concatenated run-on)
           live.transcript += (live.transcript ? '\n' : '') + normalized;
-          // keep transcript lightweight: cap to last 8000 chars
-          if (live.transcript.length > 8000) {
-            live.transcript = live.transcript.slice(-8000);
+          // keep transcript lightweight: cap to last 3000 chars
+          if (live.transcript.length > 3000) {
+            live.transcript = live.transcript.slice(-3000);
           }
           send('live:transcript',live.transcript);
 
@@ -1313,12 +1240,6 @@ ipcMain.on("start-session", () => {
 
 ipcMain.on("end-session", (e, summary) => {
     lastSessionSummary = summary;
-    try {
-      appendActivityHistory({
-        ts: Date.now(),
-        summary: summary || {}
-      });
-    } catch {}
     win.loadFile(path.join(__dirname, "summaryRoot.html"));
 });
 ipcMain.on("exit-app", () => {
@@ -1330,39 +1251,6 @@ ipcMain.on("finish-session", () => {
 });
 ipcMain.handle("get-summary", () => {
   return lastSessionSummary;
-});
-ipcMain.handle("summary:show-entry", async (_e, summary) => {
-  lastSessionSummary = summary || {};
-  if (win && !win.isDestroyed()) {
-    await win.loadFile(path.join(__dirname, "summaryRoot.html"));
-    return { ok: true };
-  }
-  return { ok: false, error: "window unavailable" };
-});
-ipcMain.handle("activity:history", () => {
-  return readActivityHistory();
-});
-ipcMain.handle("logout", async () => {
-  const sessionPath = path.join(app.getPath("userData"), "session.json");
-  try { fs.writeFileSync(sessionPath, "{}"); } catch {}
-  isSessionActive = false;
-  try {
-    const port = await startRendererServer();
-    if (win && !win.isDestroyed()) {
-      await win.loadURL(`http://127.0.0.1:${port}/login.html`);
-      return { ok: true };
-    }
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-  return { ok: false, error: "window unavailable" };
-});
-ipcMain.handle("load-user-info", async () => {
-  if (win && !win.isDestroyed()) {
-    await win.loadFile(path.join(__dirname, "userInfo.html"));
-    return { ok: true };
-  }
-  return { ok: false, error: "window unavailable" };
 });
 
 
@@ -1608,23 +1496,6 @@ ipcMain.handle("screenread:getClipboardImage", async () => {
 });
 
 
-ipcMain.handle("incognito:set", async (_e, flag) => {
-  const incog = applyIncognito(!!flag);
-  return { ok: true, incognito: incog };
-});
-
-ipcMain.handle("incognito:get", async () => ({ ok: true, incognito: incognitoOn }));
-
-ipcMain.handle("logout:clear", async () => {
-  const sessionPath = path.join(app.getPath("userData"), "session.json");
-  try { fs.writeFileSync(sessionPath, "{}"); } catch {}
-  const port = await startRendererServer();
-  if (win && !win.isDestroyed()) {
-    await win.loadURL(`http://127.0.0.1:${port}/login.html`);
-  }
-  return { ok: true };
-});
-
 // ---------------- Window controls / env ----------------
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
@@ -1639,11 +1510,6 @@ ipcMain.handle("window:close", async () => {
     }
   }
   // If already on summary or no session, quit
-  const currentUrl = win?.webContents?.getURL() || "";
-  if (currentUrl.includes("summaryRoot.html")) {
-    app.quit();
-    return;
-  }
   app.quit();
 });
 

@@ -7,22 +7,22 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-      strategy:
-        fail-fast: false
-        matrix:
-          include:
-            - os: macos-latest
-              arch: x64
-              platform: darwin
-              build_cmd: npm run build:mac
-            - os: macos-latest
-              arch: arm64
-              platform: darwin
-              build_cmd: npm run build:mac
-            - os: windows-latest
-              arch: x64
-              platform: win32
-              build_cmd: npm run build:win
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: x64
+            platform: darwin
+            build_cmd: npm run build:mac
+          - os: macos-latest
+            arch: arm64
+            platform: darwin
+            build_cmd: npm run build:mac
+          - os: windows-latest
+            arch: x64
+            platform: win32
+            build_cmd: npm run build:win
 
     steps:
       - name: Checkout
