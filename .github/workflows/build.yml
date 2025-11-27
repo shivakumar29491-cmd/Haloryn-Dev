@@ -8,16 +8,17 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             arch: x64
             platform: darwin
-            build_cmd: npm run build:mac
+            build_cmd: npm run build:mac -- --${{ matrix.arch }}
           - os: windows-latest
             arch: x64
             platform: win32
-            build_cmd: npm run build:win
+            build_cmd: npm run build:win -- --${{ matrix.arch }}
 
     steps:
       - name: Checkout
@@ -42,6 +43,9 @@ jobs:
             --arch=${{ matrix.arch }}
 
       - name: Build app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: ${{ matrix.build_cmd }}
 
       - name: Upload artifacts
