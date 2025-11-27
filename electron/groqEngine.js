@@ -1,13 +1,9 @@
 // -----------------------------------------------------------
-//  groqEngine.js — LLM Answer Engine (ROOT FOLDER)
-//  Phase 8 — use Haloryn Backend (Vercel)
+//  groqEngine.js – LLM Answer Engine (ROOT FOLDER)
+//  Phase 8 – use Haloryn Backend (Vercel)
 // -----------------------------------------------------------
 
 const fetch = require("node-fetch");
-
-// -----------------------------------------------------------
-// 1. GROQ WHISPER TRANSCRIPTION  (via direct Groq API)
-// -----------------------------------------------------------
 const Groq = require("groq-sdk");
 
 // Lazily create client so missing env key doesn't crash app startup.
@@ -24,9 +20,13 @@ function getGroqClient() {
   return groqClient;
 }
 
+// -----------------------------------------------------------
+// 1. GROQ WHISPER TRANSCRIPTION (via direct Groq API)
+// -----------------------------------------------------------
 async function groqWhisperTranscribe(audioBuffer) {
   const groq = getGroqClient();
   if (!groq) return "";
+
   try {
     const response = await groq.audio.transcriptions.create({
       file: {
@@ -45,42 +45,43 @@ async function groqWhisperTranscribe(audioBuffer) {
 }
 
 // -----------------------------------------------------------
-// 2. FAST ANSWER — USE Haloryn BACKEND (NOT GROQ DIRECT)
+// 2. FAST ANSWER – USE Haloryn BACKEND (NOT GROQ DIRECT)
 // -----------------------------------------------------------
-async function groqFastAnswer(prompt, docContextText = '', docName = '') {
+async function groqFastAnswer(prompt, docContextText = "", docName = "") {
   const groq = getGroqClient();
   if (!groq) return "";
+
   let prefixed = prompt;
   if (docContextText) {
     // Keep doc context short but present to steer Groq toward the attached file
     const ctx = docContextText.slice(0, 4000);
-    const name = docName ? `("${docName}")` : '';
+    const name = docName ? `("${docName}")` : "";
     prefixed = `Document context ${name}:\n${ctx}\n\nUser prompt:\n${prompt}`;
   }
+
   try {
-   const result = await groq.chat.completions.create({
-  model: "llama-3.1-8b-instant",
-  messages: [
-    {
-      role: "system",
-      content: "You are Haloryn. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
-    },
-    { role: "user", content: prefixed }
-  ],
-  temperature: 0.15,
-  // Allow longer, still bounded (model supports larger contexts)
-  max_tokens: 4096
-});
+    const result = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are Haloryn. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
+        },
+        { role: "user", content: prefixed }
+      ],
+      temperature: 0.15,
+      // Allow longer, still bounded (model supports larger contexts)
+      max_tokens: 4096
+    });
 
     const text = result.choices?.[0]?.message?.content || "";
     return text.trim();
-
   } catch (err) {
     console.error("Groq Direct API Error:", err.message);
     return "";
   }
 }
-
 
 // -----------------------------------------------------------
 // EXPORTS
