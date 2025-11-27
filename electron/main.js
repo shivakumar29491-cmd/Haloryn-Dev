@@ -964,7 +964,6 @@ async function genericAnswer(userText){
 async function answer(userText) {
   const q = (userText || '').trim();
   send("log", `[answer()] received prompt: ${q}`);
-  console.log("[answer()] received prompt:", q);
 
   if (!q) return '';
 
@@ -1175,7 +1174,7 @@ let live={on:false, idx:0, transcript:''};
 let pendingAnswerTimer = null;
 let pendingAnswerCtx = '';
 // Larger chunk reduces CPU churn; can be overridden via UI config
-let recConfig={device:'default', gainDb:'0', chunkMs:2000};
+let recConfig={device:'default', gainDb:'6', chunkMs:3200};
 
 // Live Companion state
 const companion = {
@@ -1277,9 +1276,9 @@ function startChunk(){
         if(normalized){
           // Append each recognized utterance as its own line (no concatenated run-on)
           live.transcript += (live.transcript ? '\n' : '') + normalized;
-          // keep transcript lightweight: cap to last 3000 chars
-          if (live.transcript.length > 3000) {
-            live.transcript = live.transcript.slice(-3000);
+          // keep transcript lightweight: cap to last 8000 chars
+          if (live.transcript.length > 8000) {
+            live.transcript = live.transcript.slice(-8000);
           }
           send('live:transcript',live.transcript);
 
