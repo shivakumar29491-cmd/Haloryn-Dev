@@ -1,12 +1,12 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Haloryn - Next-gen AI Companion</title>
-<meta http-equiv="Content-Security-Policy"
-      content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;">
 
-<link rel="stylesheet" href="./styles/mainApp.css" />
+  <link rel="stylesheet" href="./styles/mainApp.css" />
 </head>
 <body>
   <div class="app-surface">
@@ -24,51 +24,20 @@
       </div>
 
       <div class="chrome-right">
-        <div id="userChip" class="user-chip hidden">
-          <div class="user-avatar">😊</div>
-          <div class="user-meta">
-          <div class="user-name" id="userName">Logged in</div>
-          <div class="user-provider" id="userProvider"></div>
-          </div>
-          <span class="chevron">▾</span>
-        </div>
-        <div id="userMenu" class="user-menu hidden">
-          <div class="menu-item" id="menuAccount">Account</div>
-          <div class="menu-item" id="menuSignout">Sign out</div>
+        <button class="tab" data-tab="pre">Pre-recorded</button>
+        <div class="live-controls">
+          <span id="liveState">idle</span>
+          <button id="screenReadBtn" class="ghost" title="Read text from current screen" aria-label="Screen Read">Screen Read</button>
+            <button id="incognitoToggle" class="ghost toggle icon-btn" title="Hide window from taskbar and screen share" aria-label="Incognito">🕶️</button>
         </div>
         <div class="win-buttons">
           <button id="btn-min" title="Minimize">-</button>
           <button id="btn-max" title="Maximize">□</button>
-          <button id="btn-close" title="Close">✕</button>
+          <button id="btn-close" title="Close">x</button>
         </div>
       </div>
     </div>
 </head>
-
-    <!-- Tabs + live controls -->
-    <div class="tabs">
-      <button class="tab active" data-tab="live">Live</button>
-      <button class="tab" data-tab="pre">Pre-recorded</button>
-      <button class="tab" data-tab="logs">Logs</button>
-
-      <div class="live-controls">
-        <label class="search-label" for="searchMode">Search:</label>
-        <select id="searchMode">
-          <option value="fastest">Fastest</option>
-          <option value="cheapest">Cheapest</option>
-          <option value="accurate">Most accurate</option>
-          <option value="local">Local only</option>
-        </select>
-        <span id="liveState">idle</span>
-        <button id="incognitoToggle" class="ghost toggle icon-only" title="Hide window from taskbar and screen share" aria-label="Incognito">
-          🕶
-        </button>
-        <button id="companionToggle" class="ghost toggle" title="Live Companion">Companion</button>
-        <button id="screenReadBtn" class="ghost" title="Read text from current screen">Screen Read</button>
-      </div>
-    </div>
-
-    <!-- Live -->
     <section id="tab-live" class="panel show">
       <div class="glass">
 
@@ -79,23 +48,22 @@
           <textarea id="transcript" style="display:none;"></textarea>
         </div>
 
-        <div class="chat-header-row">
-          <span id="docBadge" class="doc-badge hidden"></span>
-          <button id="docToggle" class="pill-toggle">Doc</button>
-          <button id="docEnrichToggle" class="pill-toggle">Enrich</button>
+        <div class='chat-header-row'>
+          <span id='docBadge' class='doc-badge hidden'></span>
         </div>
 
         <!-- Chat input row + attachments -->
         <div class="chat-row">
-          <button id="fileBtn" title="Attach document">📎</button>
+         <button id="fileBtn" title="Attach document" class="icon-btn">📎</button>
           <input id="docInput" type="file" accept=".txt,.pdf" hidden />
-          <input id="chatInput" type="text" placeholder="Ask Haloryn… Press Enter" />
-          <button id="chatSend" title="Send">↪</button>
+          <input id="chatInput" type="text" placeholder="Ask Haloryn - Press Enter" />
+         <button id="companionToggle" class="ghost mic-btn icon-btn" title="Live Companion">🎤</button>
+          <button id="chatSend" title="Send">➤</button>
         </div>
 
         <!-- Answer -->
         <div class="answer-box">
-          <label>Answer <a id="clearAnswer" href="javascript:void(0)">🧹</a></label>
+          <label>Answer <a id="clearAnswer" href="javascript:void(0)">✕</a></label>
 
           <div id="liveAnswerContainer" class="answer-container">
             <div id="liveAnswer" class="answer-content"></div>
@@ -118,22 +86,14 @@
       </div>
     </section>
 
-    <!-- Logs -->
-    <section id="tab-logs" class="panel">
-      <div class="glass">
-        <label>API usage (this session)</label>
-        <div id="apiUsagePanel" class="api-usage-panel"></div>
-      </div>
-      <div class="glass">
-        <label>Logs</label>
-        <textarea id="liveLog" rows="20" spellcheck="false"></textarea>
-      </div>
-    </section>
 
     <script src="chatbox.js"></script>
     <script src="renderer.js"></script>
   </div>
 </body>
 </html>
+
+
+
 
 
