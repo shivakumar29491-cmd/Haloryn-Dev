@@ -49,15 +49,25 @@ export async function loginGoogle() {
     const cred = await signInWithPopup(auth, provider);
     return cred.user;
   } catch (err) {
-    // Fallback to redirect if popup fails (blocked or unsupported)
-    await signInWithRedirect(auth, provider);
-    return null;
+    // Only fall back to redirect for known popup issues; otherwise surface the error.
+    const code = err?.code || "";
+    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw err;
   }
 }
 
 export async function resolveRedirectLogin() {
-  const result = await getRedirectResult(auth);
-  return result?.user || null;
+  try {
+    const result = await getRedirectResult(auth);
+    return result?.user || null;
+  } catch (err) {
+    // Ignore "no auth event" noise; bubble up anything else for logging.
+    if (err?.code === "auth/no-auth-event") return null;
+    throw err;
+  }
 }
 
 export async function loginFacebook() {
@@ -66,9 +76,13 @@ export async function loginFacebook() {
     const cred = await signInWithPopup(auth, provider);
     return cred.user;
   } catch (err) {
-    // Fallback to redirect if popup fails (blocked or unsupported)
-    await signInWithRedirect(auth, provider);
-    return null;
+    // Only fall back to redirect for known popup issues; otherwise surface the error.
+    const code = err?.code || "";
+    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw err;
   }
 }
 

@@ -373,6 +373,7 @@ const btnStop  = pickFirst($('#stopBtn'),  $('[data-action="stop"]'),  $('[title
 const liveTranscript = $('#liveTranscript') || document.querySelector('#tab-live textarea');
 const liveStatus = $('#liveStatus');
 
+const incognitoToggle = $('#incognitoToggle');
 const companionToggle = $('#companionToggle');
 const transcriptEl    = $('#liveTranscript');
 const answerEl        = $('#liveAnswer');
@@ -380,6 +381,10 @@ const screenReadBtn = $('#screenReadBtn');
 const clearAnswer     = $('#clearAnswer');
 const chatInput = $('#chatInput');
 const chatSend = $('#chatSend');
+const userChip = $('#userChip');
+const userName = $('#userName');
+const userProvider = $('#userProvider');
+const chrome = document.querySelector('.window-chrome');
 
 
 
@@ -459,6 +464,68 @@ on(screenReadBtn, "click", async () => {
   }
 });
 
+
+// --- Incognito (hide taskbar/tray + block screen capture; keep app visible) ---
+function setIncognitoUI(on) {
+  if (!incognitoToggle) return;
+  const active = !!on;
+  incognitoToggle.classList.toggle("active", active);
+  incognitoToggle.title = active
+    ? "Incognito on. Press Ctrl+Shift+I to turn off."
+    : "Hide taskbar/tray icons and block screen capture";
+  document.body.classList.toggle("incognito", active);
+  chrome?.classList.toggle("incognito", active);
+}
+
+if (incognitoToggle && window.electron?.invoke) {
+  on(incognitoToggle, "click", async () => {
+    const next = !incognitoToggle.classList.contains("active");
+    try {
+      const res = await window.electron.invoke("incognito:set", next);
+      setIncognitoUI(res?.incognito);
+      appendLog(res?.incognito
+        ? "[incognito] ON (hidden from taskbar/tray; screen-share protected). Use Ctrl+Shift+I to turn off."
+        : "[incognito] OFF");
+    } catch (e) {
+      appendLog(`[incognito] toggle error: ${e.message}`);
+    }
+  });
+
+  (async () => {
+    try {
+      const res = await window.electron.invoke("incognito:get");
+      setIncognitoUI(res?.incognito);
+    } catch {}
+  })();
+}
+
+// --- User session badge + logout ---
+async function hydrateUserChip() {
+  if (!userChip || !window.electron?.invoke) return;
+  try {
+    const session = await window.electron.invoke("get-user-session");
+    const display = session?.displayName || session?.email || session?.phone || "";
+    const provider = session?.provider ? session.provider.replace(/^[a-z]/, c => c.toUpperCase()) : "";
+    if (display) {
+      userName.textContent = display;
+      userProvider.textContent = provider || "";
+      userChip.classList.remove("hidden");
+    } else {
+      userChip.classList.add("hidden");
+    }
+  } catch (e) {
+    appendLog(`[user] unable to load session: ${e.message}`);
+  }
+}
+hydrateUserChip();
+
+on(userChip, "click", async () => {
+  try {
+    await window.electron.invoke("logout:clear");
+  } catch (e) {
+    appendLog(`[user] logout failed: ${e.message}`);
+  }
+});
 
 
 //--------------------------------------------------
@@ -881,6 +948,8 @@ const fallback = await window.electron.invoke("search:router", {
 let __sessionStart = Date.now();
 let __questions = 0;
 let __answers = 0;
+const __answerLog = [];
+const __pairs = []; // { prompt, response }
 
 function countWords(text) {
   return (text || "").split(/\s+/).filter(Boolean).length;
@@ -890,6 +959,10 @@ function countWords(text) {
 const oldUnifiedAsk = unifiedAsk;
 unifiedAsk = async function(promptText) {
   __questions++;
+  try {
+    const promptClean = String(promptText || "").trim();
+    if (promptClean) __pairs.push({ prompt: promptClean, response: "" });
+  } catch {}
   return oldUnifiedAsk(promptText);
 };
 
@@ -897,6 +970,15 @@ unifiedAsk = async function(promptText) {
 const oldAppendAnswer = appendAnswerBlock;
 appendAnswerBlock = function(txt) {
   __answers++;
+  try { __answerLog.push(String(txt || "").trim()); } catch {}
+  try {
+    const cleaned = String(txt || "").trim();
+    if (__pairs.length && !__pairs[__pairs.length - 1].response) {
+      __pairs[__pairs.length - 1].response = cleaned;
+    } else if (cleaned) {
+      __pairs.push({ prompt: "", response: cleaned });
+    }
+  } catch {}
   return oldAppendAnswer(txt);
 };
 
@@ -907,12 +989,17 @@ async function sendSessionSummary() {
 
   const transcriptText = document.getElementById("liveTranscript")?.value || "";
   const wordCount = countWords(transcriptText);
+  const answersText = document.getElementById("liveAnswer")?.innerText?.trim() || "";
 
   const summary = {
     duration: msToHuman(durationMs),
     questions: __questions,
     answers: __answers,
-    words: wordCount
+    words: wordCount,
+    transcript: transcriptText,
+    responses: __answerLog.slice(0, 50), // cap to reasonable count
+    pairs: __pairs.slice(0, 200),
+    answersText
   };
 
   console.log("SUMMARY BUILT:", summary);

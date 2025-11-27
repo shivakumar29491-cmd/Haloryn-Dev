@@ -8,6 +8,22 @@ import {
 
 console.log("Login.js loaded");
 
+// Window chrome controls for frameless window
+(() => {
+  const btnMin = document.getElementById("win-min");
+  const btnMax = document.getElementById("win-max");
+  const btnClose = document.getElementById("win-close");
+  const chrome = document.querySelector(".window-buttons");
+
+  if (window.windowCtl) {
+    btnMin?.addEventListener("click", () => window.windowCtl.minimize());
+    btnMax?.addEventListener("click", () => window.windowCtl.maximize());
+    btnClose?.addEventListener("click", () => window.windowCtl.close());
+  } else if (chrome) {
+    chrome.classList.add("hidden");
+  }
+})();
+
 document.getElementById("loginBtn").onclick = async () => {
     console.log("Manual login clicked");
   const email = loginEmail.value;
@@ -33,6 +49,7 @@ document.getElementById("googleLogin").onclick = async () => {
     if (user) {
       await window.electronAPI?.saveUserSession({
         email: user?.email || "",
+        displayName: user?.displayName || "",
         phone: user?.phoneNumber || "",
         verified: true,
         provider: "google"
@@ -53,6 +70,7 @@ document.getElementById("facebookLogin").onclick = async () => {
     if (user) {
       await window.electronAPI?.saveUserSession({
         email: user?.email || "",
+        displayName: user?.displayName || "",
         phone: user?.phoneNumber || "",
         verified: true,
         provider: "facebook"
