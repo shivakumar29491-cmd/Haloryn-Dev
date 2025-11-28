@@ -36,7 +36,18 @@ const {
   clipboard
 } = require("electron");
 
-process.chdir(__dirname);
+function safeChdir(dir) {
+  try {
+    if (fs.existsSync(dir) && fs.lstatSync(dir).isDirectory()) {
+      process.chdir(dir);
+    }
+  } catch (err) {
+    // Ignore ENOTDIR when running from asar; paths will be resolved explicitly.
+    console.warn(`Skipping chdir to ${dir}: ${err.message}`);
+  }
+}
+
+safeChdir(__dirname);
 
 const { spawn, exec } = require("child_process");
 const os = require("os");
@@ -114,7 +125,7 @@ function send(ch, payload) {
   }
 }
 app.setAppUserModelId("Haloryn");
-process.chdir(__dirname);
+safeChdir(__dirname);
 
 function startRendererServer() {
   if (rendererServerPort) return Promise.resolve(rendererServerPort);

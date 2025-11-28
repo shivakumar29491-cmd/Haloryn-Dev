@@ -32,6 +32,7 @@
       "node_modules/sharp/**",
       "node_modules/@img/**"
     ],
+    "electronVersion": "30.5.1",
     "npmRebuild": true,
     "forceCodeSigning": false,
     "directories": {
@@ -47,7 +48,13 @@
       "!.github/**",
       "!web/**",
       "!dist*/**",
-      "!build/**"
+      "!build/**",
+      "!**/*.log",
+      "!**/logs/**",
+      "!**/log/**",
+      "!**/.cache/**",
+      "!**/cache/**",
+      "!**/tmp/**"
     ],
     "win": {
       "target": "nsis",
