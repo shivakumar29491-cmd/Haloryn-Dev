@@ -40,8 +40,8 @@
     },
     "files": [
       "electron/**",
-      "node_modules/**",
       "package.json",
+      "node_modules/{cheerio,dotenv,groq-sdk,mic,node-fetch,pdf-parse,screenshot-desktop,sharp,tesseract.js}/**",
       "!**/__tests__/**",
       "!coverage/**",
       "!.github/**",
@@ -53,14 +53,7 @@
       "!**/log/**",
       "!**/.cache/**",
       "!**/cache/**",
-      "!**/tmp/**",
-      "!node_modules/app-builder-bin/**",
-      "!node_modules/electron/**",
-      "!node_modules/7zip-bin/**",
-      "!node_modules/typescript/**",
-      "!node_modules/@types/**",
-      "!node_modules/.bin/**",
-      "!node_modules/app-builder-lib/**"
+      "!**/tmp/**"
     ],
     "win": {
       "target": "nsis",
