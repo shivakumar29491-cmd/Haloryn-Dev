@@ -75,6 +75,27 @@ const { initScreenReader } = require("./screenReader");
 let lastSessionSummary = null;
 let isSessionActive = false;
 
+// Optional local fast transcription service (e.g., faster-whisper).
+// If FAST_TRANSCRIBE_URL is set and returns text, we skip slower paths.
+async function tryFastLocalTranscribe(filePath) {
+  const url = process.env.FAST_TRANSCRIBE_URL || "http://127.0.0.1:8877/transcribe";
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: filePath })
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const text = json?.text || json?.transcript || "";
+    return String(text).trim() || null;
+  } catch (err) {
+    debugLog?.("[fast-transcribe] skipped:", err.message);
+    return null;
+  }
+}
+
 
 process.env.PATH = [
   'C:\\Program Files\\sox',
@@ -264,7 +285,10 @@ const RECENT_TRANSCRIPT_LINES = 10;
 const WHISPER_NGL     = String(process.env.WHISPER_NGL || '0'); // GPU offload layers if compiled (e.g. "20")
 const LANG            = process.env.WHISPER_LANG || 'en';
 
-function runWhisper(filePath){
+async function runWhisper(filePath){
+  const fastText = await tryFastLocalTranscribe(filePath);
+  if (fastText) return fastText;
+
   return new Promise((resolve, reject) => {
     try{
       if (!fs.existsSync(filePath)) return reject(new Error('audio not found'));
