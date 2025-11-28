@@ -36,6 +36,13 @@ const {
   clipboard
 } = require("electron");
 
+// Minimal debug logger guard to avoid undefined errors in new paths.
+const debugLog = (...args) => {
+  if (process.env.DEBUG_LOG) {
+    try { console.log(...args); } catch {}
+  }
+};
+
 function safeChdir(dir) {
   try {
     if (fs.existsSync(dir) && fs.lstatSync(dir).isDirectory()) {
