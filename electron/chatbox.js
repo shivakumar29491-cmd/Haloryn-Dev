@@ -89,9 +89,25 @@ this.transcript?.setAttribute('spellcheck', 'false');
     this.input.value = '';
 
     // 3) Ask backend (no AI bubble to transcript)
-    const ans = await window.electron.invoke('chat:ask', q);
+    const rawAns = await window.electron.invoke('chat:ask', q);
+    let ans = '';
+    let streamed = false;
+    if (typeof rawAns === 'string') {
+      ans = rawAns;
+    } else if (rawAns?.answer) {
+      ans = rawAns.answer;
+      streamed = !!rawAns.streamed;
+    } else if (rawAns?.ok === false) {
+      ans = `Groq Error: ${rawAns.error}`;
+    } else {
+      ans = String(rawAns || '');
+    }
 
-       // 4) Answers go ONLY to the Answer area (textarea or div)
+    if (streamed) {
+      return; // streaming renderer listeners will populate the UI
+    }
+
+    // 4) Answers go ONLY to the Answer area (textarea or div)
     if (this.answer && typeof ans === 'string') {
       const s = ans.trim();
       if (s && !this._isStatusyBanner(s)) {

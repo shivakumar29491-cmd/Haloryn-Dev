@@ -1,5 +1,4 @@
 // preload.js
-console.log("PRELOAD LOADED");
 
 const { contextBridge, ipcRenderer } = require("electron");
 
@@ -46,6 +45,10 @@ contextBridge.exposeInMainWorld('companion', {
 
 // Auth/session helpers for renderer (login + skip login)
 contextBridge.exposeInMainWorld("electronAPI", {
+  ask: (prompt) => ipcRenderer.invoke("ask", prompt),
+  detectLocationFromIp: () => ipcRenderer.invoke("location:detect-ip"),
+  saveLocation: (location) => ipcRenderer.invoke("location:save", location),
+  getLocation: () => ipcRenderer.invoke("location:get"),
   saveUserSession: (data) => ipcRenderer.send("save-user-session", data),
   getUserSession: () => ipcRenderer.invoke("get-user-session"),
   loadActivity: () => ipcRenderer.invoke("load-activity")

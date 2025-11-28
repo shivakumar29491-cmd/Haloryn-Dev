@@ -6,8 +6,6 @@ import {
   loginFacebook
 } from "../../auth/authManager.js";
 
-console.log("Login.js loaded");
-
 // Window chrome controls for frameless window
 (() => {
   const btnMin = document.getElementById("win-min");
@@ -25,7 +23,6 @@ console.log("Login.js loaded");
 })();
 
 document.getElementById("loginBtn").onclick = async () => {
-    console.log("Manual login clicked");
   const email = loginEmail.value;
   const password = loginPassword.value;
   const sendTo = loginOtpTo.value;
@@ -42,7 +39,6 @@ document.getElementById("loginBtn").onclick = async () => {
 };
 
 document.getElementById("googleLogin").onclick = async () => {
-  console.log("Google clicked");
 
   try {
     const user = await loginGoogle();
@@ -63,7 +59,6 @@ document.getElementById("googleLogin").onclick = async () => {
 };
 
 document.getElementById("facebookLogin").onclick = async () => {
-  console.log("Facebook clicked");
 
   try {
     const user = await loginFacebook();
@@ -84,7 +79,6 @@ document.getElementById("facebookLogin").onclick = async () => {
 };
 
 document.getElementById("testAppBtn").onclick = async () => {
-  console.log("Test app (skip login) clicked");
   try {
     if (!window.electronAPI) {
       throw new Error("electronAPI missing in preload");
@@ -97,7 +91,6 @@ document.getElementById("testAppBtn").onclick = async () => {
       provider: "test-skip"
     });
     const ok = await window.electronAPI.loadActivity();
-    console.log("loadActivity result", ok);
     if (!ok) {
       throw new Error("loadActivity returned false");
     }

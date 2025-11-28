@@ -47,7 +47,7 @@ async function groqWhisperTranscribe(audioBuffer) {
 // -----------------------------------------------------------
 // 2. FAST ANSWER – USE Haloryn BACKEND (NOT GROQ DIRECT)
 // -----------------------------------------------------------
-async function groqFastAnswer(prompt, docContextText = "", docName = "") {
+async function groqFastAnswer(prompt, docContextText = "", docName = "", opts = {}) {
   const groq = getGroqClient();
   if (!groq) return "";
 
@@ -59,26 +59,51 @@ async function groqFastAnswer(prompt, docContextText = "", docName = "") {
     prefixed = `Document context ${name}:\n${ctx}\n\nUser prompt:\n${prompt}`;
   }
 
-  try {
-    const result = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are Haloryn. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
-        },
-        { role: "user", content: prefixed }
-      ],
-      temperature: 0.15,
-      // Allow longer, still bounded (model supports larger contexts)
-      max_tokens: 4096
-    });
+  const basePayload = {
+    model: "llama-3.1-8b-instant",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are Haloryn. Return concise, no-fluff answers. Always infer user intent (personal, professional, hypothetical, or factual) and respond helpfully even if no external facts are provided. Prefer bullets when instructional. Keep code minimal and focused. Correct obvious typos in the prompt/context before answering. Do not narrate; skip preamble/closings."
+      },
+      { role: "user", content: prefixed }
+    ],
+    temperature: 0.15,
+    max_tokens: 4096
+  };
 
+  if (opts.stream) {
+    try {
+      const stream = await groq.chat.completions.create({
+        ...basePayload,
+        stream: true
+      });
+      let full = "";
+      for await (const part of stream) {
+        const chunk =
+          part?.choices?.[0]?.delta?.content ||
+          part?.choices?.[0]?.message?.content ||
+          "";
+        if (!chunk) continue;
+        full += chunk;
+        opts.onChunk?.(chunk);
+      }
+      return full.trim();
+    } catch (err) {
+      console.error("Groq Direct API Stream Error:", err.message);
+      opts.onError?.(err);
+      // fall back to non-streaming path below
+    }
+  }
+
+  try {
+    const result = await groq.chat.completions.create(basePayload);
     const text = result.choices?.[0]?.message?.content || "";
     return text.trim();
   } catch (err) {
     console.error("Groq Direct API Error:", err.message);
+    opts.onError?.(err);
     return "";
   }
 }

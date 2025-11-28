@@ -517,6 +517,12 @@ button.recording,
   z-index: 10;
   pointer-events: auto;
   flex: 1;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  caret-color: #0f172a;
 }
 
 /* Chat row must stay above transcript */
