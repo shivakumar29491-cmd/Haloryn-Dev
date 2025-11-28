@@ -33,7 +33,6 @@ const cheerio = require("cheerio");
 const { URL } = require("url");
 let pdfParse = null;
 const sharp = require("sharp");
-const Tesseract = require("tesseract.js");
 const { desktopCapturer } = require("electron");
 const http = require("http");
 
