@@ -24,9 +24,9 @@ jobs:
         shell: powershell
         run: |
           $envContent = @"
-GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
-BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
-"@
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
+          "@
           Set-Content -Path "electron/.env" -Value $envContent
 
       - name: Install dependencies
