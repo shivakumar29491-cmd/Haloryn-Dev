@@ -1634,8 +1634,12 @@ ipcMain.handle("window:close", async () => {
     isSessionActive = false;
     try { send('trigger:end-session'); } catch {}
     if (win && !win.isDestroyed()) {
-      await win.loadFile(path.join(__dirname, "summaryRoot.html"));
-      return;
+      try {
+        await win.loadFile(path.join(__dirname, "summaryRoot.html"));
+        return;
+      } catch (e) {
+        console.warn("[window:close] summary load aborted/failed:", e?.message);
+      }
     }
   }
   // If already on summary or no session, quit
