@@ -29,7 +29,7 @@
     "productName": "Haloryn",
     "asar": true,
     "asarUnpack": [
-      "node_modules/sharp/**",
+      "node_modules/sharp/vendor/**",
       "node_modules/@img/**"
     ],
     "electronVersion": "30.5.1",
@@ -42,7 +42,6 @@
       "electron/**",
       "node_modules/**",
       "package.json",
-      "package-lock.json",
       "!**/__tests__/**",
       "!coverage/**",
       "!.github/**",
@@ -54,15 +53,24 @@
       "!**/log/**",
       "!**/.cache/**",
       "!**/cache/**",
-      "!**/tmp/**"
+      "!**/tmp/**",
+      "!node_modules/app-builder-bin/**",
+      "!node_modules/electron/**",
+      "!node_modules/7zip-bin/**",
+      "!node_modules/typescript/**",
+      "!node_modules/@types/**",
+      "!node_modules/.bin/**",
+      "!node_modules/app-builder-lib/**"
     ],
     "win": {
       "target": "nsis",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "compression": "maximum"
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "compression": "maximum"
     }
   },
   "win": {
