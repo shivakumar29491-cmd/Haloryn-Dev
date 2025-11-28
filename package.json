@@ -53,8 +53,6 @@
       "!**/*.log",
       "!**/logs/**",
       "!**/log/**",
-      "!**/.cache/**",
-      "!**/cache/**",
       "!**/tmp/**",
       "!node_modules/app-builder-bin/**",
       "!node_modules/app-builder-lib/**",
