@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dedupe dependencies
+        run: npm dedupe
+
       - name: Rebuild sharp for Electron
         shell: bash
         run: |
