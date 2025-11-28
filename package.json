@@ -7,7 +7,8 @@
     "start": "electron .",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "analyze:bundle": "node scripts/inspect-bundle.js"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
@@ -41,7 +42,8 @@
     "files": [
       "electron/**",
       "package.json",
-      "node_modules/{cheerio,dotenv,groq-sdk,mic,node-fetch,pdf-parse,screenshot-desktop,sharp,tesseract.js}/**",
+      "node_modules/**",
+      "!electron/node_modules/**",
       "!**/__tests__/**",
       "!coverage/**",
       "!.github/**",
@@ -51,9 +53,19 @@
       "!**/*.log",
       "!**/logs/**",
       "!**/log/**",
-      "!**/.cache/**",
-      "!**/cache/**",
-      "!**/tmp/**"
+      "!**/tmp/**",
+      "!node_modules/app-builder-bin/**",
+      "!node_modules/app-builder-lib/**",
+      "!node_modules/electron/**",
+      "!node_modules/7zip-bin/**",
+      "!node_modules/typescript/**",
+      "!node_modules/@types/**",
+      "!node_modules/.bin/**",
+      "!node_modules/@babel/**",
+      "!node_modules/@testing-library/**",
+      "!node_modules/jsdom/**",
+      "!node_modules/react/**",
+      "!node_modules/react-dom/**"
     ],
     "win": {
       "target": "nsis",
