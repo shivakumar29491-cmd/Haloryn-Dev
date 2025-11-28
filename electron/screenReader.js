@@ -4,7 +4,7 @@
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
-const { nativeOcr } = require("./ocrNative");
+const { spawn } = require('child_process');
 const screenshot = require('screenshot-desktop');
 
 let logFn = null;
@@ -34,6 +34,39 @@ async function captureScreenToPng() {
   return file;
 }
 
+// Run Tesseract on the PNG and return extracted text
+function runTesseract(pngPath) {
+  const tessBin = process.env.TESSERACT_BIN || 'tesseract';
+  const outBase = pngPath.replace(/\.png$/i, '');
+  const txtPath = `${outBase}.txt`;
+  const lang = process.env.TESS_LANG || 'eng';
+
+  return new Promise((resolve, reject) => {
+    const args = [pngPath, outBase, '-l', lang];
+    log(`[screen] running: ${tessBin} ${args.join(' ')}`);
+
+    let child;
+    try {
+      child = spawn(tessBin, args, { stdio: 'ignore' });
+    } catch (e) {
+      return reject(e);
+    }
+
+    child.on('error', (err) => reject(err));
+    child.on('exit', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`tesseract exited with code ${code}`));
+      }
+      try {
+        const text = fs.existsSync(txtPath) ? fs.readFileSync(txtPath, 'utf8') : '';
+        resolve((text || '').trim());
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+}
+
 // Initialize IPC handler
 function initScreenReader({ ipcMain, log }) {
   logFn = typeof log === 'function' ? log : null;
@@ -42,7 +75,7 @@ function initScreenReader({ ipcMain, log }) {
   ipcMain.handle('screen:readOnce', async () => {
     try {
       const pngPath = await captureScreenToPng();
-      const text = await nativeOcr(pngPath);
+      const text = await runTesseract(pngPath);
       log(`[screen] OCR complete (${text.length} chars)`);
       return { ok: true, text };
     } catch (err) {
@@ -56,3 +89,4 @@ function initScreenReader({ ipcMain, log }) {
 module.exports = {
   initScreenReader
 };
+
