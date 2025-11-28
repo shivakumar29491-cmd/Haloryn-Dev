@@ -3,6 +3,7 @@ name: Build HaloAI Installers
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build-win:
