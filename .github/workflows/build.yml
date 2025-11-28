@@ -41,6 +41,11 @@ jobs:
       - name: Dedupe dependencies
         run: npm dedupe
 
+      # Keep a clean npm cache to avoid ECOMPROMISED/lock issues during npx installs
+      - name: Clean npm cache
+        run: |
+          npm cache clean --force
+
       - name: Rebuild sharp for Electron
         shell: bash
         run: |
@@ -50,9 +55,6 @@ jobs:
             --dist-url=https://electronjs.org/headers \
             --platform=${{ matrix.platform }} \
             --arch=${{ matrix.arch }}
-
-      - name: Prune dev dependencies for packaging
-        run: npm prune --production
 
       - name: Build app
         env:
