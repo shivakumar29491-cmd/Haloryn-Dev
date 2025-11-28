@@ -7,6 +7,7 @@ on:
 jobs:
   build-win:
     name: Build Windows .exe
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,6 +47,7 @@ BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
 
   build-mac:
     name: Build macOS .dmg
+    if: github.ref == 'refs/heads/main'
     # Use Intel runner to avoid arm64 exec format errors with 7zip/electron-builder
     runs-on: macos-13
     env:
