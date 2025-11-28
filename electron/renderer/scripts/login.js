@@ -40,6 +40,22 @@ document.getElementById("facebookLogin").onclick = async () => {
   await loginFacebookRedirect();
 };
 
+// Developer skip: bypass auth for manual testing
+document.getElementById("skipLogin").onclick = async () => {
+  console.log("Skip login (dev) clicked");
+  try {
+    await window.electronAPI?.saveUserSession({
+      email: "dev@skip",
+      phone: "",
+      verified: true,
+      provider: "dev-skip"
+    });
+    await window.electronAPI?.loadActivity();
+  } catch (e) {
+    console.error("Skip login failed", e);
+  }
+};
+
 // Handle redirect result on load (if popup was blocked)
 (async () => {
   try {
