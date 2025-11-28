@@ -18,7 +18,8 @@
     "node-fetch": "^2.7.0",
     "pdf-parse": "^1.1.4",
     "screenshot-desktop": "^1.15.3",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "electron": "^30.5.1",
