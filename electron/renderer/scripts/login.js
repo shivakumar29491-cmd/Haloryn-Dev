@@ -124,4 +124,3 @@ document.getElementById("testAppBtn").onclick = async () => {
     // silence redirect resolution errors
   }
 })();
-
