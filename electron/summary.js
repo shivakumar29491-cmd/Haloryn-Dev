@@ -1,8 +1,24 @@
 window.addEventListener("DOMContentLoaded", async () => {
-  // Fetch summary from main.js (non-blocking for close button)
+  console.log("SUMMARY SCRIPT ACTIVE");
+
+  // 🔹 Attach Summary Close Handler FIRST (so it always works)
+  const closeBtn = document.getElementById("closeSummary");
+  console.log("CLOSE BUTTON FOUND:", closeBtn);
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      console.log("SUMMARY CLOSE CLICKED");
+      window.electronAPI.exitApp();
+    });
+  }
+
+  console.log("SUMMARY DOM READY");
+
+  // 🔹 Fetch summary from main.js
   let summary = null;
   try {
     summary = await window.sessionAPI?.get?.();
+
     const detail = document.getElementById("sessionDetail");
     const t = document.getElementById("detailTranscript");
     const r = document.getElementById("detailResponses");
@@ -24,12 +40,15 @@ window.addEventListener("DOMContentLoaded", async () => {
         pairs.forEach(({ prompt, response }) => {
           const userLine = document.createElement("div");
           userLine.className = "pair-line";
+
           const userLabel = document.createElement("span");
           userLabel.className = "label";
           userLabel.textContent = "You:";
+
           const userText = document.createElement("span");
           userText.className = "pair-text";
           userText.textContent = stripLabel(prompt || "");
+
           userLine.appendChild(userLabel);
           userLine.appendChild(userText);
           frag.appendChild(userLine);
@@ -37,22 +56,27 @@ window.addEventListener("DOMContentLoaded", async () => {
           if (response) {
             const aiLine = document.createElement("div");
             aiLine.className = "pair-line";
+
             const aiLabel = document.createElement("span");
             aiLabel.className = "label";
             aiLabel.textContent = "Haloryn:";
+
             const aiText = document.createElement("span");
             aiText.className = "pair-text";
             aiText.textContent = stripLabel(response || "");
+
             aiLine.appendChild(aiLabel);
             aiLine.appendChild(aiText);
             frag.appendChild(aiLine);
           }
         });
+
       } else {
         const prompts = (summary?.transcript || "")
           .split(/\r?\n+/)
           .map(s => stripLabel(s))
           .filter(Boolean);
+
         let respArr = [];
         if (Array.isArray(summary?.responses) && summary.responses.length) {
           respArr = summary.responses.slice();
@@ -67,24 +91,30 @@ window.addEventListener("DOMContentLoaded", async () => {
         for (let i = 0; i < maxLen; i++) {
           const userLine = document.createElement("div");
           userLine.className = "pair-line";
+
           const userLabel = document.createElement("span");
           userLabel.className = "label";
           userLabel.textContent = "You:";
+
           const userText = document.createElement("span");
           userText.className = "pair-text";
           userText.textContent = stripLabel(prompts[i] || "");
+
           userLine.appendChild(userLabel);
           userLine.appendChild(userText);
           frag.appendChild(userLine);
 
           const aiLine = document.createElement("div");
           aiLine.className = "pair-line";
+
           const aiLabel = document.createElement("span");
           aiLabel.className = "label";
           aiLabel.textContent = "Haloryn:";
+
           const aiText = document.createElement("span");
           aiText.className = "pair-text";
           aiText.textContent = stripLabel(respArr[i] || "");
+
           aiLine.appendChild(aiLabel);
           aiLine.appendChild(aiText);
           frag.appendChild(aiLine);
@@ -92,40 +122,21 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
 
       t.innerHTML = "";
+
       if (frag.children.length) {
         t.appendChild(frag);
       } else {
         t.textContent = "(none)";
       }
+
       if (r) {
         r.textContent = "";
         r.parentElement?.classList.add("hidden");
       }
+
       detail.classList.remove("hidden");
     }
-  } catch {}
-
- document.addEventListener("DOMContentLoaded", () => {
-
-  // Close summary + quit app
-  const closeBtn = document.getElementById("closeSummary");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
-      console.log("SUMMARY CLOSE CLICKED");
-
-      try {
-        if (window.windowCtl?.exitApp) {
-          window.electron.exitApp();
-          return;
-        }
-        window.electron?.send?.("exit-app");
-        window.close();
-        setTimeout(() => { try { window.close(); } catch {} }, 100);
-      } catch (e) {
-        try { window.close(); } catch {}
-      }
-    });
+  } catch (e) {
+    console.error("SUMMARY ERROR:", e);
   }
-
-});
 });

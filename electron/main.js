@@ -243,11 +243,16 @@ ipcMain.handle("location:request-ip", async () => {
 });
 
 ipcMain.handle("load-activity", async () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    await win.loadFile(path.join(__dirname, "activityRoot.html"));
-    return true;
+  try {
+    if (win && !win.isDestroyed()) {
+      await win.loadFile(path.join(__dirname, "activityRoot.html"));
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("load-activity failed:", err);
+    return false;
   }
-  return false;
 });
 
 
@@ -1446,19 +1451,19 @@ ipcMain.on("start-session", () => {
   }
 });
 
-ipcMain.on("end-session", (e, summary) => {
-    isSessionActive = false;
-    lastSessionSummary = summary;
-    try {
-      appendActivityHistory({
-        ts: Date.now(),
-        summary: summary || {}
-      });
-    } catch {}
-    win.loadFile(path.join(__dirname, "summaryRoot.html"));
+ipcMain.on("finish-session", (e, summary) => {
+  isSessionActive = false;
+  lastSessionSummary = summary;
+  try {
+    appendActivityHistory({
+      ts: Date.now(),
+      summary: summary || {}
+    });
+  } catch {}
 
-
+  win.loadFile(path.join(__dirname, "summaryRoot.html"));
 });
+
 ipcMain.on("exit-app", () => {
   app.quit();
 });

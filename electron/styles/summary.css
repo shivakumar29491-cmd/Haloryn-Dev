@@ -4,6 +4,15 @@ body {
   font-family: system-ui, sans-serif;
   color: #dbe7ff;
 }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("../icons/haloryn.png") center/55% no-repeat;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: -1;
+}
 
 .summary-chrome {
   display: flex;

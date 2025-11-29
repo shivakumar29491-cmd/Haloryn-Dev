@@ -986,7 +986,7 @@ on($('#btn-min'), 'click', () => window.windowCtl?.minimize());
 
 on($('#btn-max'), 'click', () => window.windowCtl?.maximize());
 
-on($('#btn-close'), 'click', () => window.windowCtl?.close());
+on($('#btn-close'), 'click', () => window.electronAPI?.finishSession());
 
 
 

@@ -1,37 +1,90 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Account Info</title>
-  <style>
-    body { margin:0; padding:20px; font-family: system-ui, Arial, sans-serif; background:#101726; color:#dbe7ff; }
-    .card { background:rgba(20,26,42,.6); border:1px solid rgba(130,170,255,.25); border-radius:12px; padding:16px; max-width:420px; }
-    .row { margin:8px 0; }
-    .label { color:#9ab0d0; font-size:12px; }
-    .value { font-size:15px; font-weight:600; }
-    button { margin-top:14px; padding:8px 14px; border-radius:10px; border:1px solid rgba(130,170,255,.35); background:rgba(58,134,255,.2); color:#dbe7ff; cursor:pointer; }
-  </style>
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8" />
+<title>Account Info</title>
+
+<style>
+body{margin:0;padding:40px;font-family:system-ui,Arial,sans-serif;background:#0b1220;color:#dbe7ff;display:flex;justify-content:center;}
+.card{background:rgba(13,18,32,0.55);border:1px solid rgba(130,170,255,0.18);border-radius:18px;padding:32px;width:480px;box-shadow:0 18px 40px rgba(0,0,0,0.45);backdrop-filter:blur(22px);position:relative;}
+h3{margin:0 0 24px 0;font-size:22px;font-weight:700;color:#eaf2ff;}
+.top-icons{position:absolute;top:24px;right:24px;display:flex;gap:14px;align-items:center;}
+#editBtn,#returnBtn{font-size:20px;cursor:pointer;opacity:0.7;transition:0.2s;}
+#editBtn:hover,#returnBtn:hover{opacity:1;}
+.field-label{font-size:13px;color:#9ab0d0;margin-bottom:6px;display:block;}
+.field-input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(130,170,255,0.22);background:rgba(255,255,255,0.04);color:#e8f0ff;font-size:15px;margin-bottom:20px;transition:0.25s;}
+.field-input[readonly]{opacity:0.6;cursor:not-allowed;}
+.field-input:hover:not([readonly]){border-color:rgba(130,170,255,0.35);}
+.field-input:focus{outline:none;background:rgba(255,255,255,0.08);border-color:#3a86ff;box-shadow:0 0 0 3px rgba(58,134,255,0.28);}
+.btn-row{display:flex;gap:12px;margin-top:10px;}
+.btn{padding:10px 22px;border-radius:10px;font-size:15px;cursor:pointer;transition:0.2s;border:1px solid rgba(130,170,255,0.25);}
+.btn-save{background:#3a86ff;color:#fff;border:none;box-shadow:0 6px 16px rgba(58,134,255,0.35);}
+.btn-save:hover{filter:brightness(1.12);}
+body::before{content:"";position:fixed;inset:0;background:url("./icons/haloryn.png")center/55% no-repeat;opacity:0.05;pointer-events:none;z-index:-1;}
+</style>
 </head>
+
 <body>
-  <div class="card">
-    <h3>Account</h3>
-    <div class="row"><div class="label">Name</div><div class="value" id="infoName"></div></div>
-    <div class="row"><div class="label">Email</div><div class="value" id="infoEmail"></div></div>
-    <div class="row"><div class="label">Phone</div><div class="value" id="infoPhone"></div></div>
-    <button id="backBtn">Back</button>
+<div class="card">
+  <h3>Account</h3>
+
+  <!-- TOP RIGHT ICONS -->
+  <div class="top-icons">
+    <span id="editBtn">✏️</span>
+    <span id="returnBtn">↩️</span>
   </div>
-  <script>
-    (async () => {
-      try {
-        const session = await window.electronAPI?.getUserSession?.();
-        document.getElementById("infoName").textContent = session?.displayName || "(none)";
-        document.getElementById("infoEmail").textContent = session?.email || "(none)";
-        document.getElementById("infoPhone").textContent = session?.phone || "(none)";
-      } catch {}
-    })();
-    document.getElementById("backBtn").onclick = () => {
-      window.history.back();
-    };
-  </script>
+
+  <label class="field-label">Name</label>
+  <input id="accName" class="field-input" type="text" readonly />
+
+  <label class="field-label">Email</label>
+  <input id="accEmail" class="field-input" type="text" readonly />
+
+  <label class="field-label">Phone</label>
+  <input id="accPhone" class="field-input" type="text" readonly />
+
+  <!-- SAVE BUTTON ONLY -->
+  <div class="btn-row" id="btnRow" style="display:none;">
+    <button id="saveBtn" class="btn btn-save">Save</button>
+  </div>
+</div>
+
+<script>
+const inputs=[document.getElementById("accName"),document.getElementById("accEmail"),document.getElementById("accPhone")];
+const editBtn=document.getElementById("editBtn");
+const returnBtn=document.getElementById("returnBtn");
+const btnRow=document.getElementById("btnRow");
+
+// Load account data
+(async()=>{try{
+  const s=await window.electronAPI?.getUserSession?.();
+  document.getElementById("accName").value=s?.displayName||"";
+  document.getElementById("accEmail").value=s?.email||"";
+  document.getElementById("accPhone").value=s?.phone||"";
+}catch(e){console.error(e);}})();
+
+// Edit mode
+editBtn.onclick=()=>{
+  inputs.forEach(i=>i.removeAttribute("readonly"));
+  btnRow.style.display="flex";
+  editBtn.style.display="none";
+  returnBtn.style.display="none";
+};
+
+// Return to activity page
+returnBtn.onclick=()=>{window.location.href="activityRoot.html";};
+
+// Save details
+document.getElementById("saveBtn").onclick=async()=>{
+  const updated={
+    displayName:document.getElementById("accName").value.trim(),
+    email:document.getElementById("accEmail").value.trim(),
+    phone:document.getElementById("accPhone").value.trim()
+  };
+  try{
+    await window.electronAPI?.saveUserSession?.(updated);
+    window.location.href="activityRoot.html";
+  }catch(e){console.error("Save failed",e);}
+};
+</script>
+
 </body>
 </html>
