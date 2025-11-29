@@ -11,6 +11,17 @@ body {
   padding: 20px;
   animation: fadeIn 0.4s ease-out;
 }
+.card-label {
+  background: none;
+  border: none;
+  padding: 14px;
+  border-radius: 12px;
+  text-align: left;
+  font-size: 16px;
+  color: #dbe7ff;
+  cursor: default;
+  box-shadow: none;
+}
 
 /* Hero */
 .activity-hero {
@@ -22,14 +33,24 @@ body {
   margin-bottom: 18px;
   overflow: visible;
 }
-.activity-hero::before {
+/*.activity-hero::before {
   content: "";
   position: absolute;
   inset: 0;
   background: url("../icons/haloryn.png") center/55% no-repeat;
   opacity: 0.06;
   pointer-events: none;
+}*/
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("../icons/haloryn.png") center/55% no-repeat;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: -1;
 }
+
 .hero-content {
   position: relative;
   display: flex;
