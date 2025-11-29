@@ -91,18 +91,23 @@ async function unifiedAsk(promptText) {
   }
 
   const conversationalPrompt = buildConversationPrompt(prompt);
-  if (searchRequired && (!searchResults || !searchResults.length)) {
-    const locNote = effectiveLocation?.label || effectiveLocation?.postal || "";
-    return `I can't reach the web right now${locNote ? ` for ${locNote}` : ""}. Please check your connection or try again.`;
-  }
+if (searchRequired && (!searchResults || !searchResults.length)) {
+  // still allow LLM to answer, do NOT return early
+  searchResults = [];
+}
 
-  const answer = await routeToLLM(conversationalPrompt, searchResults, locationForLLM, prompt, {
+
+ const answer = await routeToLLM(conversationalPrompt, searchResults, locationForLLM, prompt, {
     noCode: true,
-    maxLen: 150
-  });
+    maxLen: Infinity
+});
+
   recordTurn("user", prompt);
-  recordTurn("assistant", answer);
-  return answer;
+if (answer && answer.trim()) {
+  recordTurn("assistant", answer.trim());
+}
+return answer;
+
 }
 
 module.exports = { unifiedAsk };

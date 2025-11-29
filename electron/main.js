@@ -1626,39 +1626,32 @@ ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
 ipcMain.handle("ask", async (_e, prompt) => {
   try {
     const answer = await unifiedAsk(prompt);
-    return answer;
+    return { answer: String(answer || "").trim() };
   } catch (err) {
     send("log", `[ask:error] ${err.message}`);
-    return `Error: ${err.message}`;
+    return { answer: `Error: ${err.message}` };
   }
 });
 
+
+
 ipcMain.handle("chat:ask", async (_e, prompt) => {
-  const streamId = ++answerStreamSeq;
-  send('answer:stream-start', { id: streamId, prompt });
-  let streamed = true;
   try {
-  const docText = useDoc ? (docContext.text || '') : '';
-  const docName = useDoc ? (docContext.name || '') : '';
-  let streamed = false;
-  const ans = await groqFastAnswer(prompt, docText, docName, {
-    stream: true,
-    onChunk: (chunk) => {
-      streamed = true;
-      send('answer:stream-chunk', { id: streamId, chunk });
-    },
-    onError: (err) => {
-      send('answer:stream-error', { id: streamId, error: err.message });
-    }
-  });
-  const finalText = (ans || "").toString().trim() || "No answer.";
-  send('answer:stream-final', { id: streamId, text: finalText });
-  return { answer: finalText, streamed };
+    // Route to unifiedAsk instead of Groq fast stream
+    const answer = await unifiedAsk(prompt);
+
+    return {
+      answer: String(answer || "").trim(),
+      streamed: false
+    };
   } catch (err) {
-    send('answer:stream-error', { id: streamId, error: err.message });
-    return { answer: `Groq Error: ${err.message}`, streamed };
+    return {
+      answer: "Error: " + err.message,
+      streamed: false
+    };
   }
 });
+
 
 // Phase-10 unified search router endpoint
 ipcMain.handle("search:router", async (_e, query) => {

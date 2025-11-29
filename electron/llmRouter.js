@@ -63,31 +63,27 @@ function buildStructuredPrompt(userPrompt, searchResults, location, includeLocat
   return parts.filter(Boolean).join("\n\n");
 }
 
-function cleanAnswer(answer, maxLen = 400) {
+function cleanAnswer(answer, maxLen = Infinity){
   let out = String(answer || "").trim();
-  if (!out) return "";
+  if (!out) return "I couldn't generate an answer.";
 
-  out = out.replace(/https?:\/\/\S+/gi, "").replace(/\(\s*\)/g, "");
+  out = out.replace(/https?:\/\/\S+/gi, "");
+  out = out.replace(/\(\s*\)/g, "");
 
-  const boilerplate = [
+  const boiler = [
     /as an ai language model/gi,
-    /i cannot (?:assist|provide|complete)/gi,
-    /i'm unable to/gi,
-    /i do not have (?:access|ability)/gi,
-    /powered by .*/gi
+    /i cannot/gi,
+    /i do not have/gi,
+    /i'm unable/gi
   ];
-  boilerplate.forEach((re) => {
-    out = out.replace(re, "").trim();
-  });
+  boiler.forEach((r) => out = out.replace(r, "").trim());
 
-  out = out.replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
-  const cap = Math.max(50, Math.min(maxLen, 400));
-  if (out.length > cap) {
-    out = out.slice(0, cap).trimEnd() + "...";
-  }
+  out = out.replace(/\n{3,}/g, "\n\n");
 
-  return out;
+  
+  return out || "I couldn't generate an answer.";
 }
+
 
 async function askGroq(structuredPrompt) {
   try {

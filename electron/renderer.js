@@ -237,37 +237,10 @@ function ensureStreamActive(id) {
 }
 
 
-function normalizeAnswer(text, maxLen = DEFAULT_MAX_LEN) {
-
-  if (text == null) return '';
-
-  let raw = '';
-
-  if (typeof text === 'string') {
-
-    raw = text;
-
-  } else if (typeof text === 'object' && text.message) {
-
-    raw = text.message;
-
-  } else {
-
-    try { raw = JSON.stringify(text, null, 2); }
-
-    catch { raw = String(text); }
-
-  }
-
-  let s = String(raw || '').trim();
-
-  if (!s) return '';
-
-  if (maxLen && s.length > maxLen) s = s.slice(0, maxLen).trimEnd() + '...';
-
-  return s;
-
+function normalizeAnswer(text) {
+  return String(text || "").trim();
 }
+
 
 
 
@@ -296,100 +269,96 @@ function maybeAutoScroll(container) {
 }
 
 
-
 function renderActionButtons(text) {
-
-  const wrap = document.createElement('div');
-
-  wrap.className = 'answer-actions';
+  const wrap = document.createElement("div");
+  wrap.className = "answer-actions";
 
   const mk = (label, handler) => {
-
-    const btn = document.createElement('button');
-
-    btn.className = 'answer-action-btn';
-
+    const btn = document.createElement("button");
+    btn.className = "answer-action-btn";
     btn.textContent = label;
-
     btn.onclick = handler;
-
     return btn;
-
   };
 
-  wrap.appendChild(mk('Follow up questions', () => {
+  wrap.appendChild(
+    mk("Follow up questions", async () => {
+      const q = `Give 2 follow-up questions for: ${text}`;
+      const res = await window.electronAPI.ask(q);
+      appendAnswerBlock(res.answer || res);
+    })
+  );
 
-    unifiedAsk(`Give 2 short follow-up questions (total <=200 chars) based on: ${text}`);
-
-  }));
-
-  wrap.appendChild(mk('Detailed explanation', () => {
-
-    unifiedAsk(`Provide a concise detailed explanation (max 300 chars, no code) for: ${text}`);
-
-  }));
+  wrap.appendChild(
+    mk("Detailed explanation", async () => {
+      const q = `Give a detailed explanation for: ${text}`;
+      const res = await window.electronAPI.ask(q);
+      appendAnswerBlock(res.answer || res);
+    })
+  );
 
   return wrap;
-
 }
 
 
 
-function renderAnswers() {
+// ---- Virtualized Chat Renderer ----
 
-  const container = document.getElementById('liveAnswer');
+const VIRTUAL_WINDOW = 3; // render 1 above, 1 current, 1 below
+let lastScrollTop = 0;
 
+function renderAnswersVirtualized() {
+  const container = document.getElementById("liveAnswer");
   if (!container) return;
 
-  container.innerHTML = '';
+  const h = container.clientHeight;
+  const st = container.scrollTop;
 
-  const startIdx = Math.max(0, ALL_ANSWERS.length - MAX_RENDERED);
+  // Estimate which answer index is visible (rough approximation)
+  const avgHeight = 250; // adjust if needed
+  const visibleIndex = Math.floor(st / avgHeight);
 
-  for (let i = startIdx; i < ALL_ANSWERS.length; i++) {
+  const start = Math.max(0, visibleIndex - 1);
+  const end = Math.min(ALL_ANSWERS.length - 1, visibleIndex + 1);
 
-    if (!shouldRenderSlot(i)) continue;
+  // Clear container
+  container.innerHTML = "";
 
+  // Render only 3 items
+  for (let i = start; i <= end; i++) {
     const ans = ALL_ANSWERS[i];
+    const wrap = document.createElement("div");
+    wrap.className = "answer-entry v-item";
 
-    const frag = document.createDocumentFragment();
-
-    const div = document.createElement('div');
-
-    div.className = 'answer-block answer-entry';
-
+    const div = document.createElement("div");
+    div.className = "answer-block";
     div.textContent = ans.text;
+    div.style.whiteSpace = "pre-wrap";
 
-    div.style.whiteSpace = 'pre-wrap';
+    wrap.appendChild(div);
+    wrap.appendChild(renderActionButtons(ans.text));
 
-    div.style.wordBreak = 'break-word';
+    // Fill vertical space as if all answers existed
+    wrap.style.paddingTop = i === start ? (start * avgHeight) + "px" : "0px";
+    wrap.style.paddingBottom = (ALL_ANSWERS.length - end - 1) * avgHeight + "px";
 
-    frag.appendChild(div);
-
-    frag.appendChild(renderActionButtons(ans.text));
-
-    container.appendChild(frag);
-
+    container.appendChild(wrap);
   }
-
-  maybeAutoScroll(container);
-
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("liveAnswer");
+  if (!container) return;
 
+  container.addEventListener("scroll", () => {
+    const st = container.scrollTop;
+    if (Math.abs(st - lastScrollTop) > 100) {
+      lastScrollTop = st;
+      renderAnswersVirtualized();
+    }
+  });
+});
 
-function appendAnswerBlock(text, maxLen = DEFAULT_MAX_LEN) {
-
-  revealPanels();
-
-  const normalized = normalizeAnswer(text, maxLen);
-
-  if (!normalized) return;
-
-  ALL_ANSWERS.push({ text: normalized, maxLen });
-
-  renderAnswers();
-
-}
 
 
 
@@ -410,35 +379,28 @@ function beginStreamingAnswer() {
 
 
 function flushStream() {
-
   if (!activeStream || !chunkBuffer) {
-
     chunkBuffer = '';
-
     chunkTimer = null;
-
     return;
-
   }
 
   const combined = (activeStream.text || '') + chunkBuffer;
 
-  const lines = combined.split(//).slice(-STREAM_LINE_LIMIT).join('');
+  // FIX: Correct line splitting
+  const linesArr = combined.split(/\r?\n/);
+  const lastLines = linesArr.slice(-STREAM_LINE_LIMIT).join('\n');
 
-  activeStream.text = normalizeAnswer(lines, activeStream.maxLen));
+  activeStream.text = normalizeAnswer(lastLines, activeStream.maxLen);
 
   if (ALL_ANSWERS.length) {
-
     ALL_ANSWERS[ALL_ANSWERS.length - 1].text = activeStream.text;
-
-    renderAnswers();
+    renderAnswersVirtualized();
 
   }
 
   chunkBuffer = '';
-
   chunkTimer = null;
-
 }
 
 
@@ -479,7 +441,8 @@ function finalizeStreamingAnswer(finalText) {
 
     chunkBuffer = '';
 
-    renderAnswers();
+    renderAnswersVirtualized();
+
 
     return;
 
@@ -493,6 +456,23 @@ function finalizeStreamingAnswer(finalText) {
 
 }
 
+window.__askDirect = async function(prompt) {
+  try {
+    const clean = String(prompt || "").trim();
+    if (!clean) return;
+
+    setState("answering");
+    const res = await window.electronAPI.ask(clean);
+
+    const final = res?.answer || res?.text || res || "";
+    appendAnswerBlock(final);
+
+    setState("idle");
+  } catch (e) {
+    appendAnswerBlock("Error: " + e.message);
+    setState("idle");
+  }
+};
 
 
 function handleStreamStart(payload) {
@@ -661,58 +641,6 @@ function renderApiUsagePanel(){
   `).join('');
 
 }
-
-//Grok Renderer
-
-// Groq Renderer
-
-async function fastAskGroq(prompt) {
-
-  const start = performance.now();
-
-  const res = await window.electron.invoke("chat:ask", prompt);
-
-  const ms = Math.round(performance.now() - start);
-
-
-
-  appendLog(`GROQ answered in ${ms} ms`);
-
-
-
-  let answer = "";
-
-  let streamed = false;
-
-  if (typeof res === "string") {
-
-    answer = res;
-
-  } else if (res?.answer) {
-
-    answer = res.answer;
-
-    streamed = !!res.streamed;
-
-  } else if (res?.ok === false) {
-
-    answer = `Groq Error: ${res.error}`;
-
-  } else {
-
-    answer = String(res || "");
-
-  }
-
-
-
-  return { answer, streamed };
-
-}
-
-
-
-
 
 // NEW: periodically pull provider stats from main.js (searchRouter.getProviderStats)
 
@@ -2243,8 +2171,8 @@ on(transcribeBtn, 'click', async () => {
 on(clearAnswer, 'click', () => {
 
   ALL_ANSWERS.length = 0;
+renderAnswersVirtualized();
 
-  renderAnswers();
 
 });
 
@@ -2314,82 +2242,21 @@ async function unifiedAsk(promptText) {
 
     setState("answering");
 
-    finalizeStreamingAnswer('');
+    const response = await window.electronAPI.ask(userPrompt);
 
-
-
-    const effectivePrompt = userPrompt;
-
-
-
-    // 1) Direct Groq Fast answer
-
-    try {
-
-      const quickRes = await fastAskGroq(effectivePrompt);
-
-      const quick = typeof quickRes === 'object' ? quickRes.answer : quickRes;
-
-      const streamed = typeof quickRes === 'object' ? !!quickRes.streamed : false;
-
-      debugLog("[Renderer] Groq fast returned:", quick);
-
-
-
-      if (typeof quick === "string" && quick.trim() !== "") {
-        if (!streamed) {
-          appendAnswerBlock(quick.trim());
-        }
-        setState("idle");
-        return;
-      }
-      if (streamed) {
-        setState("idle");
-        return;
-      }
-    } catch (err) {
-
-      debugLog("[Renderer] Groq fast error:", err.message);
-
+    let final = '';
+    if (typeof response === "string") {
+      final = response;
+    } else if (response?.answer) {
+      final = response.answer;
+    } else if (response?.text) {
+      final = response.text;
+    } else if (response) {
+      final = JSON.stringify(response);
     }
 
-
-
-    // 2) Web router fallback (Brave/Bing/GooglePSE/SerpAPI)
-
-const fallback = await window.electron.invoke("search:router", { 
-
-  query: effectivePrompt, 
-
-  maxResults: 5 
-
-});
-
-    debugLog("[Renderer] Fallback received:", fallback);
-
-
-
-    // Normalize ANY return type from main.js into a printable string
-
-    let final = "";
-
-    if (typeof fallback === "string") {
-
-      final = fallback;
-
-    } else if (fallback?.answer) {
-
-      final = fallback.answer;
-
-    } else {
-
-      final = JSON.stringify(fallback);
-
-    }
-
-
-
-    appendAnswerBlock(final.trim());
+    const cleaned = String(final || '').trim();
+    appendAnswerBlock(cleaned || "I couldn't generate an answer. Please try again.");
 
     setState("idle");
 
@@ -2399,7 +2266,7 @@ const fallback = await window.electron.invoke("search:router", {
 
     debugLog("[Renderer unifiedAsk ERROR]", err);
 
-    appendAnswerBlock("Γ¥î Error: " + err.message);
+    appendAnswerBlock("Error: " + err.message);
 
     setState("idle");
 
@@ -2437,57 +2304,25 @@ function countWords(text) {
 
 
 
-// Count all questions asked through unifiedAsk
-
-const oldUnifiedAsk = unifiedAsk;
-
-unifiedAsk = async function(promptText) {
-
-  __questions++;
-
-  try {
-
-    const promptClean = String(promptText || "").trim();
-
-    if (promptClean) __pairs.push({ prompt: promptClean, response: "" });
-
-  } catch {}
-
-  return oldUnifiedAsk(promptText);
-
-};
 
 
+function appendAnswerBlock(text) {
+  revealPanels();
 
-// Count answers
+  const normalized = normalizeAnswer(text);
+  if (!normalized) return;
 
-const oldAppendAnswer = appendAnswerBlock;
+  ALL_ANSWERS.push({ text: normalized });
 
-appendAnswerBlock = function(txt, maxLen = DEFAULT_MAX_LEN) {
-
-  __answers++;
-
-  try { __answerLog.push(String(txt || "").trim()); } catch {}
-
-  try {
-
-    const cleaned = String(txt || "").trim();
-
-    if (__pairs.length && !__pairs[__pairs.length - 1].response) {
-
-      __pairs[__pairs.length - 1].response = cleaned;
-
-    } else if (cleaned) {
-
-      __pairs.push({ prompt: "", response: cleaned });
-
+  setTimeout(() => {
+    const container = document.getElementById("liveAnswer");
+    if (container) {
+      container.scrollTop = container.scrollHeight + 9999;
     }
+    renderAnswersVirtualized();
+  }, 5);
+}
 
-  } catch {}
-
-  return oldAppendAnswer(txt, maxLen);
-
-};
 
 
 
