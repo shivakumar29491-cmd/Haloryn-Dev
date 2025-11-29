@@ -1,15 +1,16 @@
-name: Build HaloAI Installers
+name: Build Haloryn Installers
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches:
+      - main        # Only build on main commits
+  workflow_dispatch: # Allow manual runs
 
 jobs:
   build-win:
     name: Build Windows .exe
-    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
+    if: github.ref == 'refs/heads/main'
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -17,19 +18,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+        # Node.js 20
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Create .env for build
-        shell: powershell
         run: |
           $envContent = @"
 GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
 BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
 "@
           Set-Content -Path "electron/.env" -Value $envContent
+        shell: powershell
 
       - name: Install dependencies
         run: npm ci
@@ -42,15 +44,13 @@ BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
       - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
-          name: HaloAI-Windows
+          name: Haloryn-Windows
           path: dist/*.exe
-
 
   build-mac:
     name: Build macOS .dmg
-    if: github.ref == 'refs/heads/main'
-    # Use Intel runner to avoid arm64 exec format errors with 7zip/electron-builder
     runs-on: macos-13
+    if: github.ref == 'refs/heads/main'
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -65,7 +65,7 @@ BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
 
       - name: Create .env for build
         run: |
-          cat <<'EOF' > electron/.env
+          cat <<EOF > electron/.env
 GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
 BRAVE_API_KEY=${{ secrets.BRAVE_API_KEY }}
 EOF
@@ -82,5 +82,5 @@ EOF
       - name: Upload macOS Installer
         uses: actions/upload-artifact@v4
         with:
-          name: HaloAI-macOS
+          name: Haloryn-macOS
           path: dist/*.dmg

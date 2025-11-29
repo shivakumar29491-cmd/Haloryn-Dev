@@ -105,13 +105,17 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   } catch {}
 
+ document.addEventListener("DOMContentLoaded", () => {
+
   // Close summary + quit app
   const closeBtn = document.getElementById("closeSummary");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
+      console.log("SUMMARY CLOSE CLICKED");
+
       try {
         if (window.windowCtl?.exitApp) {
-          window.windowCtl.exitApp();
+          window.electron.exitApp();
           return;
         }
         window.electron?.send?.("exit-app");
@@ -122,4 +126,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
+
+});
 });
