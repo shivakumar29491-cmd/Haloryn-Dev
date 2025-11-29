@@ -4,7 +4,9 @@
   "version": "0.0.3",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
@@ -18,6 +20,24 @@
     "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^30.0.0",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.haloryn.app",
+    "productName": "Haloryn",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/*/{test,.bin}",
+      "!*.map"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": null,
+    "linux": null
   }
 }

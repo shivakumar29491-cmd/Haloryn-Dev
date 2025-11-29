@@ -24,7 +24,8 @@ contextBridge.exposeInMainWorld('windowCtl', {
    getSummary: () => ipcRenderer.invoke("get-summary"),
    endSession: (payload) => ipcRenderer.send("end-session", payload),
    finishSession: () => ipcRenderer.send("finish-session"),
-   exitApp: () => ipcRenderer.send("exit-app")
+   exitApp: () => ipcRenderer.send("exit-app"),
+   openSummary: (cb) => ipcRenderer.on("open-summary", cb)   // ← ADD THIS
 });
 
 

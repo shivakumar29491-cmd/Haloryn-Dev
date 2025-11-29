@@ -244,11 +244,12 @@ ipcMain.handle("location:request-ip", async () => {
 
 ipcMain.handle("load-activity", async () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    await mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
+    await win.loadFile(path.join(__dirname, "activityRoot.html"));
     return true;
   }
   return false;
 });
+
 
 // ---------------- Window ----------------
 let win;
@@ -1439,7 +1440,8 @@ ipcMain.on("start-session", () => {
   isSessionActive = true;
 
   if (win && !win.isDestroyed()) {
-    win.loadFile(path.join(__dirname, "indexRoot.html"))
+   win.loadFile(path.join(__dirname, "indexRoot.html"))
+
     .catch(err => console.error("[start-session loadFile error]", err));
   }
 });
@@ -1454,21 +1456,22 @@ ipcMain.on("end-session", (e, summary) => {
       });
     } catch {}
     win.loadFile(path.join(__dirname, "summaryRoot.html"));
+
+
 });
 ipcMain.on("exit-app", () => {
   app.quit();
 });
 
-ipcMain.on("finish-session", () => {
-  win.loadFile(path.join(__dirname, "activityRoot.html"));
-});
+
 ipcMain.handle("get-summary", () => {
   return lastSessionSummary;
 });
 ipcMain.handle("summary:show-entry", async (_e, summary) => {
   lastSessionSummary = summary || {};
   if (win && !win.isDestroyed()) {
-    await win.loadFile(path.join(__dirname, "summaryRoot.html"));
+    await win.loadFile(path.join(__dirname, "summaryRoot.html")); 
+;
     return { ok: true };
   }
   return { ok: false, error: "window unavailable" };
@@ -1511,7 +1514,7 @@ ipcMain.handle("logout:clear", async () => {
   try { fs.writeFileSync(sessionPath, "{}"); } catch {}
   const port = await startRendererServer();
   if (win && !win.isDestroyed()) {
-    await win.loadURL(`http://127.0.0.1:${port}/login.html`);
+    await win.loadFile(path.join(__dirname, "login.html"));
   }
   return { ok: true };
 });
@@ -1786,11 +1789,23 @@ ipcMain.handle("screenread:getClipboardImage", async () => {
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
 ipcMain.handle("window:close", async () => {
-  // Always close the app; avoid navigation during shutdown to prevent ERR_ABORTED
-  isSessionActive = false;
-  try { send('trigger:end-session'); } catch {}
+  if (isSessionActive) {
+    isSessionActive = false;
+
+    try { send('trigger:end-session'); } catch {}
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("open-summary");
+    }
+
+    // ❗ IMPORTANT: Do NOT quit — let summary page stay open
+    return;
+  }
+
+  // If NOT in a session → now quit for real
   app.quit();
 });
+
 
 ipcMain.handle('window:restore', () => {
   if (win && win.isMinimized()) win.restore();
