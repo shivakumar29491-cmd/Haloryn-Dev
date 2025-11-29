@@ -38,12 +38,8 @@ const {
   nativeImage
 } = require("electron");
 
-// Minimal debug logger guard to avoid undefined errors in new paths.
-const debugLog = (...args) => {
-  if (process.env.DEBUG_LOG) {
-    try { console.log(...args); } catch {}
-  }
-};
+// Minimal debug logger guard (no console output by default).
+const debugLog = () => {};
 
 function safeChdir(dir) {
   try {
@@ -73,6 +69,7 @@ const { triggerSnip } = require("./triggerSnip");
 
 // Groq Engines
 const { groqWhisperTranscribe, groqFastAnswer } = require("./groqEngine");
+const { unifiedAsk } = require("./unifiedAsk");
 
 // Haloryn backend
 const backend = require("./api/index.js");
@@ -91,9 +88,12 @@ const trayIconPath = path.join(__dirname, "icons", "haloryn-32.png");
 const incognitoHotkey = "CommandOrControl+Shift+I";
 const userDataPath = path.join(os.tmpdir(), "haloryn-user");
 const historyPath = path.join(userDataPath, "activityHistory.json");
+const userDataFile = path.join(userDataPath, "userData.json");
+const cachePath = path.join(userDataPath, "Cache");
 
 let tray = null;
 let incognitoOn = false;
+let answerStreamSeq = 0;
 
 // Optional local fast transcription service (e.g., faster-whisper).
 // If FAST_TRANSCRIBE_URL is set and returns text, we skip slower paths.
@@ -149,8 +149,63 @@ function appendActivityHistory(entry) {
   }
 }
 
+function readUserDataFile() {
+  try {
+    return JSON.parse(fs.readFileSync(userDataFile, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeUserDataFile(payload) {
+  try {
+    fs.mkdirSync(userDataPath, { recursive: true });
+    fs.writeFileSync(userDataFile, JSON.stringify(payload, null, 2));
+  } catch (err) {
+    console.warn("[userData] write failed:", err?.message);
+  }
+}
+
+function getSavedLocation() {
+  const data = readUserDataFile();
+  return data?.location || null;
+}
+
+function persistLocation(location) {
+  if (!location || typeof location !== "object") return null;
+  const data = readUserDataFile();
+  data.location = { ...location, savedAt: Date.now() };
+  writeUserDataFile(data);
+  return data.location;
+}
+
+async function fetchIpLocation() {
+  try {
+    const res = await fetch("https://ipapi.co/json/");
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json) return null;
+    const loc = {
+      city: json.city,
+      region: json.region,
+      country: json.country_name,
+      lat: json.latitude || json.lat,
+      lon: json.longitude || json.lon,
+      label: [json.city, json.region, json.country_name].filter(Boolean).join(", "),
+      source: "ip"
+    };
+    return loc;
+  } catch (err) {
+    console.warn("[location:ip] lookup failed:", err?.message);
+    return null;
+  }
+}
+
 // Force Electron to use a writable temp directory and avoid disk cache errors
+try { fs.mkdirSync(cachePath, { recursive: true }); } catch {}
 try { app.setPath("userData", userDataPath); } catch {}
+try { app.setPath("cache", cachePath); } catch {}
+try { app.commandLine.appendSwitch("disk-cache-dir", cachePath); } catch {}
 try { app.commandLine.appendSwitch("disable-http-cache"); } catch {}
 try { app.commandLine.appendSwitch("disable-gpu"); } catch {}
 try { app.commandLine.appendSwitch("disable-gpu-compositing"); } catch {}
@@ -168,6 +223,23 @@ ipcMain.handle("get-user-session", () => {
   } catch {
     return {};
   }
+});
+
+ipcMain.handle("location:get", async () => {
+  return { ok: true, location: getSavedLocation() };
+});
+
+ipcMain.handle("location:set", async (_e, location) => {
+  const saved = persistLocation(location);
+  if (saved) return { ok: true, location: saved };
+  return { ok: false, error: "invalid location" };
+});
+
+ipcMain.handle("location:request-ip", async () => {
+  const loc = await fetchIpLocation();
+  if (!loc) return { ok: false, error: "ip lookup failed" };
+  const saved = persistLocation(loc);
+  return { ok: true, location: saved || loc };
 });
 
 ipcMain.handle("load-activity", async () => {
@@ -522,12 +594,19 @@ async function cachedSmartSearch(query, opts = {}) {
 
   const t0 = Date.now();
   const { unifiedWebSearch } = require("./searchRoot/searchRouter");
-const results = await unifiedWebSearch(query, 5);
+  const response = await unifiedWebSearch(query, 5);
 
   const ms = Date.now() - t0;
-  send('log', `[api] provider=router kind=web ms=${ms}`);
+  const provider = response?.provider || 'router';
+  send('log', `[api] provider=${provider} kind=web ms=${ms}`);
 
-  if (results && Array.isArray(results)) {
+  const results = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.results)
+      ? response.results
+      : [];
+
+  if (results.length) {
     searchCache.set(key, { ts: now, results });
   }
   return results;
@@ -1018,8 +1097,6 @@ async function genericAnswer(userText){
 // ---------------- CLOUD-ONLY ROUTER (Phase 8) ----------------
 async function answer(userText) {
   const q = (userText || '').trim();
-  send("log", `[answer()] received prompt: ${q}`);
-  console.log("[answer()] received prompt:", q);
 
   if (!q) return '';
 
@@ -1546,16 +1623,35 @@ ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
 
 // ---------------- Chat + Doc ingest ----------------
 // Phase-10 unified Groq backend endpoint
-ipcMain.handle("chat:ask", async (_e, prompt) => {
+ipcMain.handle("ask", async (_e, prompt) => {
   try {
-    const docText = useDoc ? (docContext.text || '') : '';
-    const docName = useDoc ? (docContext.name || '') : '';
-    const ans = await groqFastAnswer(prompt, docText, docName);
-    return ans || "No answer.";
+    const answer = await unifiedAsk(prompt);
+    return { answer: String(answer || "").trim() };
   } catch (err) {
-    return `Groq Error: ${err.message}`;
+    send("log", `[ask:error] ${err.message}`);
+    return { answer: `Error: ${err.message}` };
   }
 });
+
+
+
+ipcMain.handle("chat:ask", async (_e, prompt) => {
+  try {
+    // Route to unifiedAsk instead of Groq fast stream
+    const answer = await unifiedAsk(prompt);
+
+    return {
+      answer: String(answer || "").trim(),
+      streamed: false
+    };
+  } catch (err) {
+    return {
+      answer: "Error: " + err.message,
+      streamed: false
+    };
+  }
+});
+
 
 // Phase-10 unified search router endpoint
 ipcMain.handle("search:router", async (_e, query) => {

@@ -6,8 +6,6 @@ import {
   loginFacebook
 } from "../../auth/authManager.js";
 
-console.log("Login.js loaded");
-
 // Window chrome controls for frameless window
 (() => {
   const btnMin = document.getElementById("win-min");
@@ -24,26 +22,52 @@ console.log("Login.js loaded");
   }
 })();
 
-document.getElementById("loginBtn").onclick = async () => {
-    console.log("Manual login clicked");
-  const email = loginEmail.value;
-  const password = loginPassword.value;
-  const sendTo = loginOtpTo.value;
-  const phone = loginPhone.value;
+const loginEmailEl = document.getElementById("loginEmail");
+const loginPasswordEl = document.getElementById("loginPassword");
+const loginOtpToEl = document.getElementById("loginOtpTo");
+const loginPhoneEl = document.getElementById("loginPhone");
+const loginBtn = document.getElementById("loginBtn");
+const googleBtn = document.getElementById("googleLogin");
+const facebookBtn = document.getElementById("facebookLogin");
+const testAppBtn = document.getElementById("testAppBtn");
 
-  const otpSession = await loginManual(email, password, sendTo, phone);
+function attachLoading(button, handler) {
+  if (!button) return;
+  button.addEventListener("click", async (event) => {
+    if (button.classList.contains("is-loading")) return;
+    button.classList.add("is-loading");
+    button.disabled = true;
+    try {
+      await handler(event);
+    } finally {
+      button.classList.remove("is-loading");
+      button.disabled = false;
+    }
+  });
+}
 
-  sessionStorage.setItem("otpFlowType", sendTo);
-  sessionStorage.setItem("otpEmail", email);
-  sessionStorage.setItem("otpPhone", phone);
-  sessionStorage.setItem("otpConfirmObj", JSON.stringify(otpSession));
+attachLoading(loginBtn, async () => {
+  try {
+    const email = loginEmailEl.value;
+    const password = loginPasswordEl.value;
+    const sendTo = loginOtpToEl.value;
+    const phone = loginPhoneEl.value;
 
-  window.location = "otp.html";
-};
+    const otpSession = await loginManual(email, password, sendTo, phone);
 
-document.getElementById("googleLogin").onclick = async () => {
-  console.log("Google clicked");
+    sessionStorage.setItem("otpFlowType", sendTo);
+    sessionStorage.setItem("otpEmail", email);
+    sessionStorage.setItem("otpPhone", phone);
+    sessionStorage.setItem("otpConfirmObj", JSON.stringify(otpSession));
 
+    window.location = "otp.html";
+  } catch (err) {
+    console.error("Manual login failed", err);
+    alert(`Login failed: ${err?.message || err}`);
+  }
+});
+
+attachLoading(googleBtn, async () => {
   try {
     const user = await loginGoogle();
     if (user) {
@@ -60,11 +84,9 @@ document.getElementById("googleLogin").onclick = async () => {
     console.error("Google login failed", err);
     alert(`Google login failed: ${err?.message || err}`);
   }
-};
+});
 
-document.getElementById("facebookLogin").onclick = async () => {
-  console.log("Facebook clicked");
-
+attachLoading(facebookBtn, async () => {
   try {
     const user = await loginFacebook();
     if (user) {
@@ -81,10 +103,9 @@ document.getElementById("facebookLogin").onclick = async () => {
     console.error("Facebook login failed", err);
     alert(`Facebook login failed: ${err?.message || err}`);
   }
-};
+});
 
-document.getElementById("testAppBtn").onclick = async () => {
-  console.log("Test app (skip login) clicked");
+attachLoading(testAppBtn, async () => {
   try {
     if (!window.electronAPI) {
       throw new Error("electronAPI missing in preload");
@@ -97,7 +118,6 @@ document.getElementById("testAppBtn").onclick = async () => {
       provider: "test-skip"
     });
     const ok = await window.electronAPI.loadActivity();
-    console.log("loadActivity result", ok);
     if (!ok) {
       throw new Error("loadActivity returned false");
     }
@@ -105,7 +125,7 @@ document.getElementById("testAppBtn").onclick = async () => {
     console.error("Skip login failed", err);
     alert(`Unable to skip login: ${err?.message || err}`);
   }
-};
+});
 
 // Handle redirect result on load (if popup was blocked)
 (async () => {
