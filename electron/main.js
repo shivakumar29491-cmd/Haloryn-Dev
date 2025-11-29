@@ -56,7 +56,7 @@ function safeChdir(dir) {
   }
 }
 
-safeChdir(__dirname);
+//safeChdir(__dirname);
 
 const { spawn, exec } = require("child_process");
 const os = require("os");
@@ -75,7 +75,7 @@ const { triggerSnip } = require("./triggerSnip");
 
 // Groq Engines
 const { groqWhisperTranscribe, groqFastAnswer } = require("./groqEngine");
-const { unifiedAsk } = require("./unifiedAsk");
+const unifiedAsk = require("./unifiedAsk");
 
 // Haloryn backend
 const backend = require("./api/index.js");
@@ -1677,14 +1677,15 @@ ipcMain.handle("ask", async (_e, prompt) => {
 
 
 
+// === RESTORE OLD CHAT PATHWAY (chat:ask) ===
 ipcMain.handle("chat:ask", async (_e, prompt) => {
   try {
-    // Route to unifiedAsk instead of Groq fast stream
+    // Old behavior → send prompt to unifiedAsk
     const answer = await unifiedAsk(prompt);
 
     return {
       answer: String(answer || "").trim(),
-      streamed: false
+      streamed: false     // old code expects this field
     };
   } catch (err) {
     return {

@@ -38,7 +38,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    loadActivity: () => ipcRenderer.invoke("load-activity"),
 
    // LLM + location
-   ask: (prompt) => ipcRenderer.invoke("ask", prompt),
+// LLM + location
+ask: (prompt) => ipcRenderer.invoke("ask", prompt),
+chatAsk: (prompt) => ipcRenderer.invoke("chat:ask", prompt),
    requestIpLocation: () => ipcRenderer.invoke("location:request-ip"),
    setLocation: (location) => ipcRenderer.invoke("location:set", location),
    getLocation: () => ipcRenderer.invoke("location:get")

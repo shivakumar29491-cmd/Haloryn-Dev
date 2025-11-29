@@ -28,7 +28,22 @@ activateBtn.onclick = async () => {
 
 // --- Start Trial ---
 trialBtn.onclick = async () => {
-    const res = await window.licenseAPI.startTrial();
+    const email = document.getElementById("trialEmail").value.trim();
+
+    if (!email) {
+        statusText.textContent = "Please enter an email.";
+        return;
+    }
+
+    // DEV mode: skip everything
+    if (!window.isPackaged) {
+        console.log("DEV MODE: trial popup skipped → redirect to app");
+        window.electronAPI.loadActivity();
+        return;
+    }
+
+    // PROD MODE — start trial linked to email
+    const res = await window.licenseAPI.startTrial(email);
 
     if (res?.success) {
         statusText.textContent = "Trial Started!";
@@ -37,6 +52,6 @@ trialBtn.onclick = async () => {
             if (!ok) console.error("loadActivity failed");
         }, 700);
     } else {
-        statusText.textContent = "Unable to start trial.";
+        statusText.textContent = res?.message || "Unable to start trial.";
     }
 };

@@ -58,7 +58,57 @@ function initiateLocationDetection() {
     { timeout: 7000, maximumAge: 5 * 60 * 1000 }
   );
 }
+// =====================================================
 
+//   UNIVERSAL ANSWER PIPELINE (SAFE + NO RECURSION)
+
+// =====================================================
+
+async function unifiedAsk(promptText) {
+
+  try {
+
+    const userPrompt = String(promptText || "").trim();
+
+    if (!userPrompt) return;
+
+
+
+    appendTranscriptLine(`You: ${userPrompt}`);
+
+    setState("answering");
+
+    const response = await window.electronAPI.ask(userPrompt);
+
+    let final = '';
+    if (typeof response === "string") {
+      final = response;
+    } else if (response?.answer) {
+      final = response.answer;
+    } else if (response?.text) {
+      final = response.text;
+    } else if (response) {
+      final = JSON.stringify(response);
+    }
+
+    const cleaned = String(final || '').trim();
+    appendAnswerBlock(cleaned || "I couldn't generate an answer. Please try again.");
+
+    setState("idle");
+
+
+
+  } catch (err) {
+
+    debugLog("[Renderer unifiedAsk ERROR]", err);
+
+    appendAnswerBlock("Error: " + err.message);
+
+    setState("idle");
+
+  }
+
+}
 
 
 // Force textarea as the single transcript sink
@@ -1444,7 +1494,9 @@ try {
 
   lastScreenReadContext = text;
 
-  await unifiedAsk(text);
+const res = await window.electronAPI.ask(text);
+appendAnswerBlock(res?.answer || res?.text || res || "");
+
 
 } catch (e) {
 
@@ -1566,7 +1618,10 @@ function queueSpeechPrompt(text) {
 
     _speechIdleTimer = null;
 
-    if (prompt) unifiedAsk(prompt);
+    if (prompt) window.electronAPI.ask(prompt).then(res => {
+    appendAnswerBlock(res?.answer || res);
+});
+
 
   }, SPEECH_IDLE_MS);
 
@@ -2028,7 +2083,11 @@ on(chatInput, 'keydown', (e) => {
 
       revealPanels();
 
-      unifiedAsk(val);
+      window.electronAPI.ask(val).then(res => {
+    const final = res?.answer || res?.text || res || "";
+    appendAnswerBlock(final);
+});
+
 
     }
 
@@ -2056,7 +2115,11 @@ on(chatSend, 'click', () => {
 
     revealPanels();
 
-    unifiedAsk(val);
+   window.electronAPI.ask(val).then(res => {
+    const final = res?.answer || res?.text || res || "";
+    appendAnswerBlock(final);
+});
+
 
   }
 
@@ -2160,7 +2223,12 @@ on(transcribeBtn, 'click', async () => {
 
   if (fileOutput) fileOutput.value += (r?.output || '') + '\n';
 
-    if (r?.output) unifiedAsk(r.output);
+   if (r?.output)
+  window.electronAPI.ask(r.output).then(res => {
+    const final = res?.answer || res?.text || res || "";
+    appendAnswerBlock(final);
+  });
+
 
 
 
@@ -2220,57 +2288,7 @@ renderAnswersVirtualized();
 
 let lastScreenReadContext = "";
 
-// =====================================================
 
-//   UNIVERSAL ANSWER PIPELINE (SAFE + NO RECURSION)
-
-// =====================================================
-
-async function unifiedAsk(promptText) {
-
-  try {
-
-    const userPrompt = String(promptText || "").trim();
-
-    if (!userPrompt) return;
-
-
-
-    appendTranscriptLine(`You: ${userPrompt}`);
-
-    setState("answering");
-
-    const response = await window.electronAPI.ask(userPrompt);
-
-    let final = '';
-    if (typeof response === "string") {
-      final = response;
-    } else if (response?.answer) {
-      final = response.answer;
-    } else if (response?.text) {
-      final = response.text;
-    } else if (response) {
-      final = JSON.stringify(response);
-    }
-
-    const cleaned = String(final || '').trim();
-    appendAnswerBlock(cleaned || "I couldn't generate an answer. Please try again.");
-
-    setState("idle");
-
-
-
-  } catch (err) {
-
-    debugLog("[Renderer unifiedAsk ERROR]", err);
-
-    appendAnswerBlock("Error: " + err.message);
-
-    setState("idle");
-
-  }
-
-}
 
 // ==============================================
 
