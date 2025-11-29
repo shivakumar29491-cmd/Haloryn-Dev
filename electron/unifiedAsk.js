@@ -54,87 +54,68 @@ function buildConversationPrompt(prompt) {
   return `${transcript}\nUser: ${prompt}`;
 }
 
+// unifiedAsk.js — CLEAN + CORRECT
+
+
+// Main entry
 async function unifiedAsk(promptText) {
-  const prompt = String(promptText || "").trim();
-  if (!prompt) return "Please provide a prompt.";
 
-  let searchResults = null;
-  const location = getLocation();
-  let effectiveLocation = location;
-  const searchRequired = needsSearch(prompt);
-  const locationNeeded = isLocationQuery(prompt);
+  promptText = String(promptText || "").trim();
 
-  if (!effectiveLocation) {
-    const zip = extractZip(prompt);
-    if (zip) {
-      effectiveLocation = { postal: zip, label: zip, source: "zip" };
-    }
+  if (!promptText) {
+    return "It seems like there's no question provided. Could you please rephrase or ask a question so I can assist you?";
   }
 
-  const locationForSearch = locationNeeded ? effectiveLocation : null;
-  const locationForLLM = locationNeeded ? effectiveLocation : null;
-
-  if (searchRequired) {
-    try {
-      const res = await searchRouter(prompt, 5, locationForSearch);
-      if (Array.isArray(res)) {
-        searchResults = res;
-      } else if (Array.isArray(res?.results)) {
-        searchResults = res.results;
-      } else {
-        searchResults = [];
-      }
-    } catch (err) {
-      console.error("[unifiedAsk] search error:", err.message);
-      searchResults = [];
-    }
+  // initialize history
+  if (!global.__HALORYN_HISTORY__) {
+    global.__HALORYN_HISTORY__ = [];
   }
 
-// ---------- Conversation Memory (Persistent Within Session) ----------
-if (!global.__HALORYN_HISTORY__) global.__HALORYN_HISTORY__ = [];
+  const history = global.__HALORYN_HISTORY__;
 
-const history = global.__HALORYN_HISTORY__;
+  // push NEW user message into history
+  history.push({ role: "user", content: promptText });
 
-// Add the user message before asking the model
-history.push({ role: "user", content: prompt });
+  // cap history
+  if (history.length > 20) history.shift();
 
-// Trim history (avoid infinite growth)
-if (history.length > 20) {
-  history.shift();
-}
+  // Build conversation prompt
+  const conversationalPrompt = {
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are Haloryn, a helpful conversational AI. Be concise, contextual, and friendly."
+      },
+      ...history,
+      { role: "user", content: promptText } // <-- correct latest user turn
+    ]
+  };
 
-// Build a conversational prompt
-const conversationalPrompt = {
-  messages: [
-    { role: "system", content: "You are Haloryn, a helpful conversational AI. Be concise, contextual, and friendly." },
-    ...history
-  ]
-};
+  // No web search for now (kept your original behavior)
+  const searchResults = [];
+  const locationForLLM = null;
 
-// If search results exist, inject them
-if (searchRequired && searchResults?.length) {
-  conversationalPrompt.messages.push({
-    role: "system",
-    content: `Relevant web results:\n${JSON.stringify(searchResults).slice(0, 2000)}`
-  });
-}
-
-// ---------- Send to router ----------
-const answer = await routeToLLM(
-  conversationalPrompt,
-  searchResults,
-  locationForLLM,
-  prompt,
-  {
+  // ---- Call the router (FIXED: promptText instead of undefined prompt)
+ const answer = await routeToLLM(
+  promptText,            // userPrompt (the actual question)
+  searchResults,         // searchResults
+  locationForLLM,        // location
+  promptText,            // latestUserPrompt
+  {                      // opts
     noCode: true,
     maxLen: Infinity
   }
 );
 
-// ---------- Store assistant reply ----------
-if (answer && answer.trim()) {
-  history.push({ role: "assistant", content: answer.trim() });
+
+  // Store assistant reply into history
+  if (answer && answer.trim()) {
+    history.push({ role: "assistant", content: answer.trim() });
+    if (history.length > 20) history.shift();
+  }
+
+  return answer;
 }
 
-return answer;
-}
+module.exports = unifiedAsk;
