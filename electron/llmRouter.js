@@ -17,6 +17,8 @@ function isComplexQuestion(prompt = "") {
   return COMPLEX_PATTERNS.some((re) => re.test(text));
 }
 
+const LOCATION_HINTS = [/\\b(weather|temperature|rain|storm)\\b/i, /\\b(time|today|tonight|current|now)\\b/i, /\\b(nearby|near me|restaurants?|hotels?)\\b/i, /\\b(news|headline|breaking)\\b/i];
+
 function formatLocation(location) {
   if (!location) return "";
   const { city, region, country, lat, lon, label, postal } = location;
@@ -40,14 +42,18 @@ function summarizeSearchResults(results = []) {
     .join("\n");
 }
 
-function buildStructuredPrompt(userPrompt, searchResults, location) {
+function hasLocationHint(prompt = "") {
+  return LOCATION_HINTS.some((re) => re.test(prompt));
+}
+
+function buildStructuredPrompt(userPrompt, searchResults, location, includeLocation = false) {
   const parts = [`User question:\n${userPrompt.trim()}`];
 
   if (Array.isArray(searchResults) && searchResults.length) {
     parts.push("Search results summary:", summarizeSearchResults(searchResults));
   }
 
-  const locText = formatLocation(location);
+  const locText = includeLocation ? formatLocation(location) : "";
   if (locText) {
     const src = location?.source ? ` (source: ${location.source})` : "";
     parts.push(`Approximate user location${src}:\n${locText}`);
@@ -163,7 +169,8 @@ async function routeToLLM(userPrompt, searchResults = null, location = null, lat
     ? "Instruction: Provide a concise text answer (3-5 bullets or a short paragraph). Do not include code blocks or implementation snippets unless explicitly requested."
     : "";
 
-  const structuredPrompt = [buildStructuredPrompt(prompt, searchResults, location), guard].filter(Boolean).join("\n\n");
+  const includeLocation = hasLocationHint(latest || prompt);
+  const structuredPrompt = [buildStructuredPrompt(prompt, searchResults, includeLocation ? location : null), guard].filter(Boolean).join("\n\n");
   const needsDeepSeek = isComplexQuestion(latest || prompt);
   let answer = "";
 

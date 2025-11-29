@@ -39,6 +39,11 @@ function extractZip(prompt = "") {
   return m ? m[0] : null;
 }
 
+function isLocationQuery(prompt = "") {
+  const text = String(prompt || "").toLowerCase();
+  return /\b(weather|temperature|rain|storm|nearby|near me|restaurants|hotels|news|headline|breaking|time|current|today|tonight|what's happening|what happened)\b/i.test(text);
+}
+
 function buildConversationPrompt(prompt) {
   if (isSimplePrompt(prompt)) return prompt;
   const history = convoHistory.slice(-MAX_TURNS * 2);
@@ -57,6 +62,7 @@ async function unifiedAsk(promptText) {
   const location = getLocation();
   let effectiveLocation = location;
   const searchRequired = needsSearch(prompt);
+  const locationNeeded = isLocationQuery(prompt);
 
   if (!effectiveLocation) {
     const zip = extractZip(prompt);
@@ -65,9 +71,12 @@ async function unifiedAsk(promptText) {
     }
   }
 
+  const locationForSearch = locationNeeded ? effectiveLocation : null;
+  const locationForLLM = locationNeeded ? effectiveLocation : null;
+
   if (searchRequired) {
     try {
-      const res = await searchRouter(prompt, 5, effectiveLocation);
+      const res = await searchRouter(prompt, 5, locationForSearch);
       if (Array.isArray(res)) {
         searchResults = res;
       } else if (Array.isArray(res?.results)) {
@@ -87,7 +96,7 @@ async function unifiedAsk(promptText) {
     return `I can't reach the web right now${locNote ? ` for ${locNote}` : ""}. Please check your connection or try again.`;
   }
 
-  const answer = await routeToLLM(conversationalPrompt, searchResults, effectiveLocation, prompt, {
+  const answer = await routeToLLM(conversationalPrompt, searchResults, locationForLLM, prompt, {
     noCode: true,
     maxLen: 150
   });

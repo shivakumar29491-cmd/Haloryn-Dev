@@ -110,11 +110,31 @@ async function searchGooglePSE(query, maxResults) {
   }
 }
 
+function isLocationSensitive(prompt = "") {
+  const s = String(prompt || "").toLowerCase();
+  const triggers = [
+    "weather", "temperature", "rain", "storm",
+    "nearby", "near me", "restaurants", "hotels",
+    "news", "headline", "breaking", "time",
+    "current", "today", "tonight"
+  ];
+  return triggers.some((t) => s.includes(t));
+}
+
+function buildLocationQuery(query, location) {
+  if (!location) return query;
+  const locText = formatLocation(location);
+  if (!locText) return query;
+  if (isLocationSensitive(query)) {
+    return `${query} near ${locText}`;
+  }
+  return query;
+}
+
 async function searchRouter(prompt, maxResults = 5, location = null) {
   const query = String(prompt || "").trim();
   if (!query) return { results: [] };
-  const locText = formatLocation(location);
-  const queryWithLocation = locText ? `${query} near ${locText}` : query;
+  const queryWithLocation = buildLocationQuery(query, location);
 
   const providers = [
     { name: "brave", fn: searchBrave },

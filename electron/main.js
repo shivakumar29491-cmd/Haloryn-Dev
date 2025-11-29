@@ -229,13 +229,13 @@ ipcMain.handle("location:get", async () => {
   return { ok: true, location: getSavedLocation() };
 });
 
-ipcMain.handle("location:save", async (_e, location) => {
+ipcMain.handle("location:set", async (_e, location) => {
   const saved = persistLocation(location);
   if (saved) return { ok: true, location: saved };
   return { ok: false, error: "invalid location" };
 });
 
-ipcMain.handle("location:detect-ip", async () => {
+ipcMain.handle("location:request-ip", async () => {
   const loc = await fetchIpLocation();
   if (!loc) return { ok: false, error: "ip lookup failed" };
   const saved = persistLocation(loc);
@@ -1638,19 +1638,22 @@ ipcMain.handle("chat:ask", async (_e, prompt) => {
   send('answer:stream-start', { id: streamId, prompt });
   let streamed = true;
   try {
-    const docText = useDoc ? (docContext.text || '') : '';
-    const docName = useDoc ? (docContext.name || '') : '';
-    const ans = await groqFastAnswer(prompt, docText, docName, {
-      stream: true,
-      onChunk: (chunk) => {
-        send('answer:stream-chunk', { id: streamId, chunk });
-      },
-      onError: (err) => {
-        send('answer:stream-error', { id: streamId, error: err.message });
-      }
-    });
-    send('answer:stream-final', { id: streamId, text: ans || '' });
-    return { answer: ans || "No answer.", streamed };
+  const docText = useDoc ? (docContext.text || '') : '';
+  const docName = useDoc ? (docContext.name || '') : '';
+  let streamed = false;
+  const ans = await groqFastAnswer(prompt, docText, docName, {
+    stream: true,
+    onChunk: (chunk) => {
+      streamed = true;
+      send('answer:stream-chunk', { id: streamId, chunk });
+    },
+    onError: (err) => {
+      send('answer:stream-error', { id: streamId, error: err.message });
+    }
+  });
+  const finalText = (ans || "").toString().trim() || "No answer.";
+  send('answer:stream-final', { id: streamId, text: finalText });
+  return { answer: finalText, streamed };
   } catch (err) {
     send('answer:stream-error', { id: streamId, error: err.message });
     return { answer: `Groq Error: ${err.message}`, streamed };

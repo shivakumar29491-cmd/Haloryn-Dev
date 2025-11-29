@@ -1,4 +1,4 @@
-const KEYWORDS = [
+﻿const KEYWORDS = [
   "weather",
   "today",
   "news",
@@ -7,39 +7,30 @@ const KEYWORDS = [
   "is it open",
   "who is the current",
   "current status",
-  "happened",
+  "what happened",
   "breaking",
-  "live",
-  "update",
-  "climate",
-  "outside",
-  "temperature"
+  "sport",
+  "stocks",
+  "stock",
+  "quote",
+  "temperature",
+  "updates",
+  "tonight",
+  "now",
+  "near me"
 ];
+const LOCATION_HINTS = [/\b(weather|temperature|rain|storm)\b/i, /\b(news|headline|breaking)\b/i, /\b(price|quote|stock)s?\b/i, /\b(is it open|are they open)\b/i, /\b(who is the current|current status)\b/i, /\b(nearby|near me|restaurants?)\b/i, /\b(what happened|what's happening)\b/i];
 
-const CATEGORY_PATTERNS = [
-  /\b(today|tonight|this week|this month)\b/i,
-  /\b(latest|breaking|recent|new)\b/i,
-  /\b(price|stock|ticker|quote|trading)\b/i,
-  /\b(weather|forecast|temperature|rain|storm)\b/i,
-  /\b(news|headline|update|status)\b/i,
-  /\b(open now|is it open|hours)\b/i,
-  /\bwho is the current\b/i,
-  /\bwhat happened\b/i,
-  /\bclimate\b/i,
-  /\boutside\b/i,
-  /\bscore|game|match|final\b/i,
-  /\bconcert|event|conference\b/i
-];
+function sanitize(text = "") {
+  return text.toString().toLowerCase();
+}
 
 function needsSearch(prompt = "") {
-  const text = String(prompt || "").toLowerCase();
-  if (!text.trim()) return false;
-
-  if (KEYWORDS.some((kw) => text.includes(kw))) {
-    return true;
-  }
-
-  return CATEGORY_PATTERNS.some((re) => re.test(text));
+  const s = sanitize(prompt);
+  if (!s.trim()) return false;
+  if (KEYWORDS.some((kw) => s.includes(kw))) return true;
+  if (LOCATION_HINTS.some((re) => re.test(prompt))) return true;
+  return false;
 }
 
 module.exports = needsSearch;

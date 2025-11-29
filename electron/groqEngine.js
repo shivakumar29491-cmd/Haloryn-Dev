@@ -89,7 +89,12 @@ async function groqFastAnswer(prompt, docContextText = "", docName = "", opts = 
         full += chunk;
         opts.onChunk?.(chunk);
       }
-      return full.trim();
+      const trimmed = full.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+      // If stream succeeded but produced no text, fall back to non-stream.
+      opts.onError?.(new Error("empty stream response"));
     } catch (err) {
       console.error("Groq Direct API Stream Error:", err.message);
       opts.onError?.(err);

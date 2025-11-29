@@ -46,8 +46,8 @@ contextBridge.exposeInMainWorld('companion', {
 // Auth/session helpers for renderer (login + skip login)
 contextBridge.exposeInMainWorld("electronAPI", {
   ask: (prompt) => ipcRenderer.invoke("ask", prompt),
-  detectLocationFromIp: () => ipcRenderer.invoke("location:detect-ip"),
-  saveLocation: (location) => ipcRenderer.invoke("location:save", location),
+  requestIpLocation: () => ipcRenderer.invoke("location:request-ip"),
+  setLocation: (location) => ipcRenderer.invoke("location:set", location),
   getLocation: () => ipcRenderer.invoke("location:get"),
   saveUserSession: (data) => ipcRenderer.send("save-user-session", data),
   getUserSession: () => ipcRenderer.invoke("get-user-session"),
