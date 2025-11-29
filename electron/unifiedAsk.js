@@ -90,24 +90,51 @@ async function unifiedAsk(promptText) {
     }
   }
 
-  const conversationalPrompt = buildConversationPrompt(prompt);
-if (searchRequired && (!searchResults || !searchResults.length)) {
-  // still allow LLM to answer, do NOT return early
-  searchResults = [];
+// ---------- Conversation Memory (Persistent Within Session) ----------
+if (!global.__HALORYN_HISTORY__) global.__HALORYN_HISTORY__ = [];
+
+const history = global.__HALORYN_HISTORY__;
+
+// Add the user message before asking the model
+history.push({ role: "user", content: prompt });
+
+// Trim history (avoid infinite growth)
+if (history.length > 20) {
+  history.shift();
 }
 
+// Build a conversational prompt
+const conversationalPrompt = {
+  messages: [
+    { role: "system", content: "You are Haloryn, a helpful conversational AI. Be concise, contextual, and friendly." },
+    ...history
+  ]
+};
 
- const answer = await routeToLLM(conversationalPrompt, searchResults, locationForLLM, prompt, {
+// If search results exist, inject them
+if (searchRequired && searchResults?.length) {
+  conversationalPrompt.messages.push({
+    role: "system",
+    content: `Relevant web results:\n${JSON.stringify(searchResults).slice(0, 2000)}`
+  });
+}
+
+// ---------- Send to router ----------
+const answer = await routeToLLM(
+  conversationalPrompt,
+  searchResults,
+  locationForLLM,
+  prompt,
+  {
     noCode: true,
     maxLen: Infinity
-});
+  }
+);
 
-  recordTurn("user", prompt);
+// ---------- Store assistant reply ----------
 if (answer && answer.trim()) {
-  recordTurn("assistant", answer.trim());
+  history.push({ role: "assistant", content: answer.trim() });
 }
+
 return answer;
-
 }
-
-module.exports = { unifiedAsk };

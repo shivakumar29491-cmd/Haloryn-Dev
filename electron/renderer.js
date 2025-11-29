@@ -268,7 +268,6 @@ function maybeAutoScroll(container) {
 
 }
 
-
 function renderActionButtons(text) {
   const wrap = document.createElement("div");
   wrap.className = "answer-actions";
@@ -299,7 +298,6 @@ function renderActionButtons(text) {
 
   return wrap;
 }
-
 
 
 // ---- Virtualized Chat Renderer ----
@@ -2305,23 +2303,25 @@ function countWords(text) {
 
 
 
-
 function appendAnswerBlock(text) {
   revealPanels();
 
   const normalized = normalizeAnswer(text);
   if (!normalized) return;
 
+  // Add new answer to virtual list
   ALL_ANSWERS.push({ text: normalized });
 
+  // Re-render the virtualized list
   setTimeout(() => {
     const container = document.getElementById("liveAnswer");
     if (container) {
+      renderAnswersVirtualized();
       container.scrollTop = container.scrollHeight + 9999;
     }
-    renderAnswersVirtualized();
   }, 5);
 }
+
 
 
 

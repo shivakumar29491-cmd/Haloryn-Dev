@@ -194,3 +194,29 @@ button.is-loading::after {
 a {
   color: #0095ff;
 }
+/* === 14-Day Trial Button === */
+.trial-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #0094fe, #02d5ff);
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  margin-top: 12px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  box-shadow: 0 0 12px rgba(0, 174, 255, 0.45);
+}
+
+.trial-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(0, 174, 255, 0.7);
+}
+
+.trial-note {
+  margin-top: 4px;
+  text-align: center;
+  color: #8ca3b8;
+  font-size: 12px;
+}

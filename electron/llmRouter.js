@@ -59,7 +59,8 @@ function buildStructuredPrompt(userPrompt, searchResults, location, includeLocat
     parts.push(`Approximate user location${src}:\n${locText}`);
   }
 
-  parts.push("Use search results to answer concisely.");
+ parts.push("Answer in a clean conversational style. Do NOT add disclaimers, meta text, or guidance. Do NOT say things like 'Please provide context', 'I'm here to help', or explain UI.");
+
   return parts.filter(Boolean).join("\n\n");
 }
 
@@ -67,9 +68,13 @@ function cleanAnswer(answer, maxLen = Infinity){
   let out = String(answer || "").trim();
   if (!out) return "I couldn't generate an answer.";
 
+  // Remove URLs
   out = out.replace(/https?:\/\/\S+/gi, "");
+
+  // Remove empty parentheses
   out = out.replace(/\(\s*\)/g, "");
 
+  // Remove meta disclaimers
   const boiler = [
     /as an ai language model/gi,
     /i cannot/gi,
@@ -78,11 +83,25 @@ function cleanAnswer(answer, maxLen = Infinity){
   ];
   boiler.forEach((r) => out = out.replace(r, "").trim());
 
+  // 🔥 REMOVE ALL META/SYSTEM GARBAGE
+  out = out.replace(/^\*\s*I'm here.*$/gmi, "");
+  out = out.replace(/^\*\s*Please provide.*$/gmi, "");
+  out = out.replace(/^\*\s*The answer section.*$/gmi, "");
+  out = out.replace(/^I'm here.*$/gmi, "");
+  out = out.replace(/^Please provide.*$/gmi, "");
+  out = out.replace(/^Buttons are typically.*$/gmi, "");
+  out = out.replace(/^In this context.*$/gmi, "");
+  out = out.replace(/^\*\s*$/gm, "");
+  
+  // Remove ALL meta bullets at start
+  out = out.replace(/^\*\s.*$/gm, "");
+
+  // Collapse excess newlines
   out = out.replace(/\n{3,}/g, "\n\n");
 
-  
   return out || "I couldn't generate an answer.";
 }
+
 
 
 async function askGroq(structuredPrompt) {
