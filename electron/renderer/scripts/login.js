@@ -29,7 +29,7 @@ const loginPhoneEl = document.getElementById("loginPhone");
 const loginBtn = document.getElementById("loginBtn");
 const googleBtn = document.getElementById("googleLogin");
 const facebookBtn = document.getElementById("facebookLogin");
-const testAppBtn = document.getElementById("testAppBtn");
+const trialBtn = document.getElementById("trialBtn");
 
 function attachLoading(button, handler) {
   if (!button) return;
@@ -105,27 +105,41 @@ attachLoading(facebookBtn, async () => {
   }
 });
 
-attachLoading(testAppBtn, async () => {
-  try {
-    if (!window.electronAPI) {
-      throw new Error("electronAPI missing in preload");
+
+attachLoading(trialBtn, async () => {
+
+    // DEV MODE ONLY
+    if (!window.isPackaged===false) {
+        try {
+            if (!window.electronAPI) {
+                throw new Error("electronAPI missing in preload");
+            }
+
+            await window.electronAPI.saveUserSession({
+                email: "",
+                phone: "",
+                verified: true,
+                provider: "trial-dev-bypass"
+            });
+
+            const ok = await window.electronAPI.loadActivity();
+            if (!ok) {
+                throw new Error("loadActivity returned false");
+            }
+
+            return; // END DEV MODE FLOW
+        } catch (err) {
+            console.error("Trial Dev Bypass failed", err);
+            alert(`Unable to bypass trial: ${err?.message || err}`);
+            return;
+        }
     }
 
-    await window.electronAPI.saveUserSession({
-      email: "",
-      phone: "",
-      verified: true,
-      provider: "test-skip"
-    });
-    const ok = await window.electronAPI.loadActivity();
-    if (!ok) {
-      throw new Error("loadActivity returned false");
-    }
-  } catch (err) {
-    console.error("Skip login failed", err);
-    alert(`Unable to skip login: ${err?.message || err}`);
-  }
+    // PROD MODE → Open subscription/trial popup
+    console.log("PROD MODE: opening license popup…");
+    window.nav.loadLocalFile("licensePopup.html");
 });
+
 
 // Handle redirect result on load (if popup was blocked)
 (async () => {
@@ -144,3 +158,4 @@ attachLoading(testAppBtn, async () => {
     // silence redirect resolution errors
   }
 })();
+

@@ -554,5 +554,24 @@ button.recording,
   position: relative;
   z-index: 1;
 }
+.followup-wrap {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.followup-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.followup-btn:hover {
+  opacity: 1;
+}
 
 

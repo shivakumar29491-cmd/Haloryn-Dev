@@ -26,6 +26,7 @@ for (const envPath of envPaths) {
     break;
   }
 }
+console.log(">>> USING THIS MAIN.JS <<<");
 
 const {
   app,
@@ -37,6 +38,9 @@ const {
   Tray,
   nativeImage
 } = require("electron");
+require("./ipc/licenseIPC");
+
+global.IS_PACKAGED = app.isPackaged;
 
 // Minimal debug logger guard (no console output by default).
 const debugLog = () => {};
@@ -64,6 +68,8 @@ const sharp = require("sharp");
 const { desktopCapturer } = require("electron");
 const http = require("http");
 const { nativeOcr } = require("./ocrNative");
+const IS_DEV = !app.isPackaged;
+
 
 const { triggerSnip } = require("./triggerSnip");
 
@@ -223,6 +229,16 @@ ipcMain.handle("get-user-session", () => {
   } catch {
     return {};
   }
+});
+ipcMain.handle("nav:loadLocalFile", async (_e, file) => {
+    try {
+        const fullPath = path.join(__dirname, file);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            await mainWindow.loadFile(fullPath);
+        }
+    } catch (err) {
+        console.error("[NAV ERROR]", err);
+    }
 });
 
 ipcMain.handle("location:get", async () => {
@@ -411,7 +427,25 @@ async function createWindow() {
 win = mainWindow;
 ensureTray();
 applyIncognito(false);
+// ==========================================
+  // PHASE 14 — SUBSCRIPTION CHECK (SAFE INSERT)
+  // ==========================================
+  const ENABLE_SUBSCRIPTIONS = process.env.ENABLE_SUBSCRIPTIONS === "true";
 
+  if (ENABLE_SUBSCRIPTIONS && process.env.NODE_ENV !== "development") {
+    try {
+      const { checkLicense } = require("./license/licenseManager");
+      const status = await checkLicense();
+
+      // If NO trial, NO license, or EXPIRED trial → go to activation screen
+      if (!status.valid) {
+        return mainWindow.loadFile(path.join(__dirname, "licensePopup.html"));
+      }
+    } catch (err) {
+      console.error("[Subscription Check Error]", err);
+      return mainWindow.loadFile(path.join(__dirname, "licensePopup.html"));
+    }
+  }
 
   // Always land on login; app navigation happens after explicit login or test bypass
   const port = await startRendererServer();

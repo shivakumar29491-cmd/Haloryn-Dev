@@ -64,4 +64,14 @@ contextBridge.exposeInMainWorld('windowCtl', {
    restore:  () => ipcRenderer.invoke('window:restore'),
    close:    () => ipcRenderer.invoke('window:close')
 });
+contextBridge.exposeInMainWorld("licenseAPI", {
+    activate: (key) => ipcRenderer.invoke("license:activate", key),
+    check: () => ipcRenderer.invoke("license:check"),
+    startTrial: () => ipcRenderer.invoke("license:startTrial"),
+    trialStatus: () => ipcRenderer.invoke("license:trialStatus")
+});
+contextBridge.exposeInMainWorld("isPackaged", global.IS_PACKAGED);
 
+contextBridge.exposeInMainWorld("nav", {
+    loadLocalFile: (file) => ipcRenderer.invoke("nav:loadLocalFile", file)
+});
