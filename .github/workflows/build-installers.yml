@@ -3,8 +3,8 @@ name: Build Haloryn Installers
 on:
   push:
     branches:
-      - main        # Only build on main commits
-  workflow_dispatch: # Allow manual runs
+      - main
+  workflow_dispatch:
 
 jobs:
   build-win:
@@ -18,7 +18,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-        # Node.js 20
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
