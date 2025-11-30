@@ -1,0 +1,41 @@
+name: build-app
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: x64
+            platform: darwin
+            build_cmd: npm run build:mac
+            build_cmd: npm run build:mac -- --${{ matrix.arch }}
+          - os: windows-latest
+            arch: x64
+            platform: win32
+            build_cmd: npm run build:win
+            build_cmd: npm run build:win -- --${{ matrix.arch }}
+
+    steps:
+      - name: Checkout
+@@ -42,11 +43,14 @@
+            --arch=${{ matrix.arch }}
+
+      - name: Build app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: ${{ matrix.build_cmd }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/**
