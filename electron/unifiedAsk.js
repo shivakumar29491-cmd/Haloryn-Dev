@@ -1,121 +1,152 @@
-const fs = require("fs");
-const path = require("path");
-const { app } = require("electron");
-const needsSearch = require("./utils/needsSearch");
-const { searchRouter } = require("./searchRoot/searchRouter");
+// ------------------------------------------------------------
+// unifiedAsk.js — CLEANED version (variable names unchanged)
+// ------------------------------------------------------------
+const { loadMemory, saveMemory } = require("./memoryManager");
 const { routeToLLM } = require("./llmRouter");
 
-const getLocationFile = () => path.join(app.getPath("userData"), "userData.json");
+// ----------------- Adaptive Memory Load ---------------------
+if (!global.__HALORYN_HISTORY__) {
+  global.__HALORYN_HISTORY__ = [];
+}
+const history = global.__HALORYN_HISTORY__;
 
-const convoHistory = []; // { role: 'user' | 'assistant', text }
-const MAX_TURNS = 6;
+let longTermMemory = loadMemory();
 
-function isSimplePrompt(prompt = "") {
-  const s = String(prompt || "");
-  return s.length < 120 && !/[?!.].*[?!.]/.test(s);
+// ----------------- Emotion Detector --------------------------
+function detectEmotion(text) {
+  const t = text.toLowerCase();
+  if (/angry|mad|upset|irritated|frustrated/.test(t)) return "angry";
+  if (/sad|unhappy|depressed|down/.test(t)) return "sad";
+  if (/confused|lost|unsure/.test(t)) return "confused";
+  if (/happy|excited|glad|awesome|great/.test(t)) return "happy";
+  return "neutral";
 }
 
-function recordTurn(role, text) {
-  const body = String(text || "").trim();
-  if (!body) return;
-  convoHistory.push({ role, text: body });
-  while (convoHistory.length > MAX_TURNS * 2) {
-    convoHistory.shift();
-  }
+// ----------------- Preference Extractor ----------------------
+function extractPreferences(text) {
+  const prefs = {};
+  const t = text.toLowerCase();
+
+  if (/i like (.*)/.test(t)) prefs.like = RegExp.$1.trim();
+  if (/i love (.*)/.test(t)) prefs.love = RegExp.$1.trim();
+  if (/i hate (.*)/.test(t)) prefs.hate = RegExp.$1.trim();
+
+  return prefs;
 }
 
-function getLocation() {
-  try {
-    const raw = fs.readFileSync(getLocationFile(), "utf8");
-    const json = JSON.parse(raw);
-    return json?.location || null;
-  } catch {
-    return null;
-  }
-}
-
-function extractZip(prompt = "") {
-  const m = String(prompt || "").match(/\b\d{5}(?:-\d{4})?\b/);
-  return m ? m[0] : null;
-}
-
-function isLocationQuery(prompt = "") {
-  const text = String(prompt || "").toLowerCase();
-  return /\b(weather|temperature|rain|storm|nearby|near me|restaurants|hotels|news|headline|breaking|time|current|today|tonight|what's happening|what happened)\b/i.test(text);
-}
-
-function buildConversationPrompt(prompt) {
-  if (isSimplePrompt(prompt)) return prompt;
-  const history = convoHistory.slice(-MAX_TURNS * 2);
-  if (!history.length) return prompt;
-  const transcript = history
-    .map((t) => `${t.role === "assistant" ? "Assistant" : "User"}: ${t.text}`)
+// ----------------- Summarizer -------------------------------
+function summarizeHistory(history) {
+  const joined = history
+    .map(m => `${m.role}: ${String(m.content || "")}`)
     .join("\n");
-  return `${transcript}\nUser: ${prompt}`;
+
+  if (joined.length > 1500) {
+    return joined.slice(-1500);
+  }
+  return joined;
 }
 
-// unifiedAsk.js — CLEAN + CORRECT
-
-
-// Main entry
+// ------------------------------------------------------------
+//            THE MAIN FUNCTION — unifiedAsk()
+// ------------------------------------------------------------
 async function unifiedAsk(promptText) {
+  try {
+    const userPrompt = String(promptText || "").trim();
+    if (!userPrompt) return;
 
-  promptText = String(promptText || "").trim();
+    // ------------- Update short-term memory ------------------
+history.push({
+  role: "user",
+  content: String(promptText || "").trim()
+});
+    if (history.length > 20) history.shift();
 
-  if (!promptText) {
-    return "It seems like there's no question provided. Could you please rephrase or ask a question so I can assist you?";
-  }
+    // ------------- Adaptive Memory Update --------------------
+    const emotion = detectEmotion(userPrompt);
+    longTermMemory.lastEmotion = emotion;
 
-  // initialize history
-  if (!global.__HALORYN_HISTORY__) {
-    global.__HALORYN_HISTORY__ = [];
-  }
+    const prefs = extractPreferences(userPrompt);
+    longTermMemory.preferences = { ...longTermMemory.preferences, ...prefs };
 
-  const history = global.__HALORYN_HISTORY__;
+    // ------------- Build adaptive system prompt --------------
+    const adaptiveSystem = `
+You are Haloryn — an advanced adaptive AI.
+Tone: ${longTermMemory.lastEmotion}
+User preferences: ${JSON.stringify(longTermMemory.preferences)}
+Conversation summary: ${longTermMemory.historySummary}
 
-  // push NEW user message into history
-  history.push({ role: "user", content: promptText });
+Rules:
+- Always stay polite, helpful, and concise.
+- Adapt your tone to user emotion.
+- Use user preferences when relevant.
+- Avoid repeating earlier responses.
+- Maintain context accuracy.
+    `;
 
-  // cap history
-  if (history.length > 20) history.shift();
+    // Cap system prompt size for model safety
+    let finalSystem = adaptiveSystem.trim();
+    if (finalSystem.length > 1000) {
+      finalSystem = finalSystem.slice(-1000);
+    }
 
-  // Build conversation prompt
-  const conversationalPrompt = {
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are Haloryn, a helpful conversational AI. Be concise, contextual, and friendly."
-      },
-      ...history,
-      { role: "user", content: promptText } // <-- correct latest user turn
-    ]
-  };
-
-  // No web search for now (kept your original behavior)
-  const searchResults = [];
-  const locationForLLM = null;
-
-  // ---- Call the router (FIXED: promptText instead of undefined prompt)
- const answer = await routeToLLM(
-  promptText,            // userPrompt (the actual question)
-  searchResults,         // searchResults
-  locationForLLM,        // location
-  promptText,            // latestUserPrompt
-  {                      // opts
+    // ----------------- Compose full LLM messages -------------
+    const conversationalPrompt = {
+      messages: [
+        { role: "system", content: finalSystem },
+        ...history
+      ]
+    };
+    // -------------------------------------
+// Prepare params for router
+// -------------------------------------
+const searchResults = [];
+const locationForLLM = null;
+    // ----------------- Call LLM Router ------------------------
+const answer = await routeToLLM(
+  sanitizeMessages(conversationalPrompt.messages),
+  searchResults,
+  locationForLLM,
+  promptText,
+  {
     noCode: true,
     maxLen: Infinity
   }
 );
 
 
-  // Store assistant reply into history
-  if (answer && answer.trim()) {
-    history.push({ role: "assistant", content: answer.trim() });
-    if (history.length > 20) history.shift();
-  }
 
-  return answer;
+    // ----------------- Record assistant response --------------
+    if (answer && answer.trim()) {
+history.push({
+  role: "assistant",
+  content: String(answer || "").trim()
+});
+      if (history.length > 20) history.shift();
+    }
+
+    // ----------------- Update long-term memory ----------------
+    longTermMemory.historySummary = summarizeHistory(history);
+    saveMemory(longTermMemory);
+
+    return answer;
+
+  } catch (err) {
+    console.error("[unifiedAsk ERROR]", err);
+    return "Error: " + err.message;
+  }
 }
 
-module.exports = unifiedAsk;
+module.exports = { unifiedAsk };
+
+function sanitizeMessages(messages) {
+  return (messages || [])
+    .filter(m => m && typeof m.role === "string")
+    .map(m => ({
+      role: m.role,
+      content: String(m.content || "")
+         .replace(/\n+/g, " ")
+         .trim()
+
+    }));
+}
+
