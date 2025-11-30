@@ -173,40 +173,61 @@ function shouldAllowCode(text = "") {
     /```/.test(text);
 }
 
-async function routeToLLM(userPrompt, searchResults = null, location = null, latestUserPrompt = null, opts = {}) {
-  const prompt = String(userPrompt || "").trim();
-  const latest = String(latestUserPrompt || userPrompt || "").trim();
-  const noCode = opts?.noCode && !shouldAllowCode(latest);
-  const maxLen = opts?.maxLen || 400;
+async function routeToLLM(
+  messages,
+  searchResults = null,
+  location = null,
+  latestUserPrompt = null,
+  opts = {}
+) {
+  const lastMsg = messages?.[messages.length - 1];
+  const prompt = lastMsg?.content?.trim() || "";
+
+  const noCode = opts?.noCode ?? false;
+  const maxLen = opts?.maxLen ?? Infinity;
+
   if (!prompt) return "Please provide a prompt.";
 
-  const guard = noCode
-    ? "Instruction: Provide a concise text answer (3-5 bullets or a short paragraph). Do not include code blocks or implementation snippets unless explicitly requested."
-    : "";
+  // Groq format — ALWAYS only latest message
+  const llmInput = [{ role: "user", content: prompt }];
 
-  const includeLocation = hasLocationHint(latest || prompt);
-  const structuredPrompt = [buildStructuredPrompt(prompt, searchResults, includeLocation ? location : null), guard].filter(Boolean).join("\n\n");
-  const needsDeepSeek = isComplexQuestion(latest || prompt);
+  const needsDeepSeek = isComplexQuestion(prompt);
   let answer = "";
 
-  if (needsDeepSeek) {
-    answer = await askDeepSeek(structuredPrompt);
-    if (!answer) {
-      answer = await askGroq(structuredPrompt);
-    }
-  } else {
-    answer = await askGroq(structuredPrompt);
-  }
+ const safe = sanitizeMessages(messages);
+const flat = buildPromptFromMessages(safe);
 
-  if (!answer) {
-    answer = await askDeepSeek(structuredPrompt);
-  }
-  if (!answer) {
-    answer = await askOpenAI(structuredPrompt);
-  }
+if (needsDeepSeek) {
+    answer = await askDeepSeek(flat);
+    if (!answer) answer = answer = await groqFastAnswer(flat);
+
+} else {
+    answer = aanswer = await groqFastAnswer(flat);
+
+}
+
+if (!answer) answer = await askDeepSeek(flat);
+if (!answer) answer = await askOpenAI(flat);
+
+
 
   return cleanAnswer(answer || "I couldn't generate an answer.", maxLen);
+}
+function buildPromptFromMessages(messages) {
+  return messages
+    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .join("\n");
 }
 
 module.exports = { routeToLLM };
 
+function sanitizeMessages(messages) {
+  return (messages || [])
+    .filter(m => m && typeof m.role === "string")
+    .map(m => ({
+      role: m.role,
+      content: String(m.content || "")
+        .replace(/\n+/g, " ")
+        .trim()
+    }));
+}
