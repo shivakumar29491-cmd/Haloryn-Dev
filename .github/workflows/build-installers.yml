@@ -26,10 +26,11 @@ jobs:
         run: npm ci
 
       - name: Clean Dist Folder
+        shell: bash
         run: rm -rf dist || true
 
       - name: Build Installers
-        shell: bash
+        
         run: npm run dist
 
       # ---- WINDOWS ARTIFACT ----
