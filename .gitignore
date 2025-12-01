@@ -22,3 +22,7 @@ logs/
 
 # Environment files
 .env
+
+
+electron/tessdata/
+electron/eng.traineddata
