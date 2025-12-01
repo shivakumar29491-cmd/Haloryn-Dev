@@ -35,7 +35,7 @@
       "electron/**/*",
       "!**/*.map"
     ],
-  
+      "publish": null,
 
 
     "asar": true,
