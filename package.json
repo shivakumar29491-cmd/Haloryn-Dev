@@ -2,7 +2,7 @@
   "name": "haloryn",
   "description": "Haloryn — Next-gen AI Companion",
   "version": "0.0.3",
-  "main": "main.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
@@ -30,11 +30,14 @@
     "directories": {
       "output": "dist"
     },
+
     "files": [
-      "**/*",
-      "!node_modules/*/{test,.bin}",
-      "!*.map"
+      "electron/**/*",
+      "!**/*.map"
     ],
+  
+
+
     "asar": true,
     "compression": "maximum",
     "win": {
