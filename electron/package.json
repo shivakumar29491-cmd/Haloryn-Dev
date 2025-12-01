@@ -23,6 +23,7 @@
     "electron": "^30.0.0",
     "electron-builder": "24.13.3"
   },
+
   "build": {
     "appId": "com.haloryn.app",
     "productName": "Haloryn",
@@ -34,10 +35,42 @@
       "!node_modules/*/{test,.bin}",
       "!*.map"
     ],
+    "asar": true,
+    "compression": "maximum",
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        }
+      ]
     },
-    "mac": null,
-    "linux": null
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Haloryn",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "background": "assets/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    }
   }
 }
