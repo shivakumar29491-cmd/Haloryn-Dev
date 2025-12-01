@@ -69,7 +69,6 @@
       "gatekeeperAssess": false
     },
     "dmg": {
-      "background": "assets/dmg-background.png",
       "window": {
         "width": 540,
         "height": 380
