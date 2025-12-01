@@ -18,42 +18,46 @@ window.addEventListener("DOMContentLoaded", async () => {
   let summary = null;
   try {
     summary = await window.sessionAPI?.get?.();
-
     const detail = document.getElementById("sessionDetail");
     const t = document.getElementById("detailTranscript");
     const r = document.getElementById("detailResponses");
 
-    if (summary) {
-      document.getElementById("dur").innerText   = summary.duration || "";
-      document.getElementById("qs").innerText    = summary.questions ?? "";
-      document.getElementById("as").innerText    = summary.answers ?? "";
-      document.getElementById("words").innerText = summary.words ?? "";
-    }
-
     if (detail && t) {
-      const stripLabel = (s = "") => s.replace(/^(You:|Haloryn:)\s*/i, "").trim();
+      const stripLabel = (s = "") =>
+        s.replace(/^(You:|Haloryn:)\s*/i, "").trim();
 
-      const pairs = Array.isArray(summary?.pairs) ? summary.pairs : null;
+      // ---------------------------------------------------------------------
+      // 🔥 FIXED PAIRED-CONVERSATION LOGIC
+      // ---------------------------------------------------------------------
+      const pairs = Array.isArray(summary?.pairs) ? summary.pairs : [];
+
       const frag = document.createDocumentFragment();
 
       if (pairs && pairs.length) {
-        pairs.forEach(({ prompt, response }) => {
-          const userLine = document.createElement("div");
-          userLine.className = "pair-line";
+        // 🔥 Use REAL paired data (prompt + response)
+        pairs.forEach((pair) => {
+          const { prompt, response } = pair || {};
 
-          const userLabel = document.createElement("span");
-          userLabel.className = "label";
-          userLabel.textContent = "You:";
+          // USER
+          if (prompt && prompt.trim().length > 0) {
+            const userLine = document.createElement("div");
+            userLine.className = "pair-line";
 
-          const userText = document.createElement("span");
-          userText.className = "pair-text";
-          userText.textContent = stripLabel(prompt || "");
+            const userLabel = document.createElement("span");
+            userLabel.className = "label";
+            userLabel.textContent = "You:";
 
-          userLine.appendChild(userLabel);
-          userLine.appendChild(userText);
-          frag.appendChild(userLine);
+            const userText = document.createElement("span");
+            userText.className = "pair-text";
+            userText.textContent = stripLabel(prompt);
 
-          if (response) {
+            userLine.appendChild(userLabel);
+            userLine.appendChild(userText);
+            frag.appendChild(userLine);
+          }
+
+          // AI
+          if (response && response.trim().length > 0) {
             const aiLine = document.createElement("div");
             aiLine.className = "pair-line";
 
@@ -63,7 +67,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
             const aiText = document.createElement("span");
             aiText.className = "pair-text";
-            aiText.textContent = stripLabel(response || "");
+            aiText.textContent = stripLabel(response);
 
             aiLine.appendChild(aiLabel);
             aiLine.appendChild(aiText);
@@ -72,9 +76,13 @@ window.addEventListener("DOMContentLoaded", async () => {
         });
 
       } else {
+        // ---------------------------------------------------------------------
+        // ❌ LEGACY FALLBACK MODE — ONLY USED IF NO pairs[] PROVIDED
+        // ---------------------------------------------------------------------
+
         const prompts = (summary?.transcript || "")
           .split(/\r?\n+/)
-          .map(s => stripLabel(s))
+          .map((s) => stripLabel(s))
           .filter(Boolean);
 
         let respArr = [];
@@ -83,7 +91,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         } else if (summary?.answersText) {
           respArr = summary.answersText
             .split(/\n\s*\n/)
-            .map(s => s.trim())
+            .map((s) => s.trim())
             .filter(Boolean);
         }
 
@@ -121,6 +129,9 @@ window.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
+      // ---------------------------------------------------------------------
+      // RENDER
+      // ---------------------------------------------------------------------
       t.innerHTML = "";
 
       if (frag.children.length) {

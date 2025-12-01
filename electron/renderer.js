@@ -1034,7 +1034,8 @@ on($('#btn-min'), 'click', () => window.windowCtl?.minimize());
 
 on($('#btn-max'), 'click', () => window.windowCtl?.maximize());
 
-on($('#btn-close'), 'click', () => window.electronAPI?.finishSession());
+on($('#btn-close'), 'click', async () => { await sendSessionSummary();   });
+
 
 
 
@@ -1518,81 +1519,77 @@ on(btnStart, 'click', async () => {
 
 
 
+// STOP BUTTON HANDLER
 on(btnStop, 'click', async () => {
-
   try { await window.electron?.invoke('live:stop'); } catch {}
 
   setState('idle');
-
   resetSpeechQueue();
-
   document.body.classList.remove('companion-on');
-
   btnStart?.classList.remove('recording');
 
+  // 🟩 Build + send summary here
+  sendSessionSummary();
 });
 
-const SPEECH_IDLE_MS = 650;            // slightly longer pause to avoid mid-sentence triggers
 
-const MAX_SPEECH_BUFFER_CHARS = 6000; // allow longer speech before trimming
+// SPEECH SETTINGS
+const SPEECH_IDLE_MS = 650;            // slightly longer pause to avoid mid-sentence triggers
+const MAX_SPEECH_BUFFER_CHARS = 6000;  // allow longer speech before trimming
 
 let _speechBuffer = [];
-
 let _speechIdleTimer = null;
 
 
-
+// SPEECH QUEUE HANDLER
 function queueSpeechPrompt(text) {
-
   const clean = String(text || '').trim();
-
   if (!clean) return;
 
   _speechBuffer.push(clean);
 
   const joined = _speechBuffer.join(' ');
-
   if (joined.length > MAX_SPEECH_BUFFER_CHARS) {
-
     _speechBuffer = [joined.slice(-MAX_SPEECH_BUFFER_CHARS)];
-
   }
 
   if (_speechIdleTimer) clearTimeout(_speechIdleTimer);
 
   _speechIdleTimer = setTimeout(() => {
-
-    const prompt = _speechBuffer.join(' ').trim();
+    const raw = _speechBuffer.join(' ');
+    const prompt = raw.trim();
 
     _speechBuffer = [];
-
     _speechIdleTimer = null;
 
-    if (prompt) window.electronAPI.ask(prompt).then(res => {
-    appendAnswerBlock(res?.answer || res);
-});
+    // Reject empty/whitespace/1-char noise
+    if (!prompt || prompt.replace(/\s+/g, '').length < 2) return;
 
+    // Pair user
+    __pairs.push({ role: 'user', text: prompt });
+
+    window.electronAPI.ask(prompt).then(res => {
+      const answerText = res?.answer || res;
+
+      appendAnswerBlock(answerText);
+
+      // Pair assistant
+      __pairs.push({ role: 'assistant', text: answerText });
+    });
 
   }, SPEECH_IDLE_MS);
-
 }
 
 
-
+// RESET SPEECH QUEUE
 function resetSpeechQueue() {
-
   _speechBuffer = [];
 
   if (_speechIdleTimer) {
-
     clearTimeout(_speechIdleTimer);
-
     _speechIdleTimer = null;
-
   }
-
 }
-
 
 
 // ======================================================
@@ -1656,69 +1653,58 @@ window.electron?.on("live:transcript", (e, data) => {
 });
 
 
+// 🟦 STREAMING MODE FIX — ONLY stream-final produces the real answer
 
-// AI answers -> Answer box
-
+// Disable live-mode from pairing (still updates UI if needed)
 window.electron?.on('live:answer', (event, t) => {
-
-
-
   if (!t) return;
 
   if (isStatusyBanner(t)) {
-
     try { setState('listening'); } catch {}
-
     return;
-
   }
 
-  appendAnswerBlock(t);
-
+  // ❌ DO NOT pair here in streaming mode
+  appendAnswerBlock(t);  
 });
 
-// Generic answer push from main.js
 
+// Disable push-mode completely in streaming setup
 window.electron?.on("answer:push", (event, text) => {
-
-  if (!text) return;
-
-  appendAnswerBlock(text);
-
+  // ❌ ignore — not used in streaming mode
 });
 
 
-
+// Stream START — do nothing except UI preparation
 window.electron?.on('answer:stream-start', (_event, payload) => {
-
-  handleStreamStart(payload);
-
+  handleStreamStart(payload);  // builds empty UI block
 });
 
 
-
+// Stream CHUNK — do not pair
 window.electron?.on('answer:stream-chunk', (_event, payload) => {
-
-  handleStreamChunk(payload);
-
+  handleStreamChunk(payload);  // updates current block live
 });
 
 
-
+// Stream FINAL — REAL ANSWER HERE
 window.electron?.on('answer:stream-final', (_event, payload) => {
 
-  handleStreamFinal(payload);
+  const finalText = payload?.text || payload;
 
+  // 🟩 Pair assistant ONCE — only here
+  if (finalText) {
+    __pairs.push({ role: 'assistant', text: finalText });
+  }
+
+  handleStreamFinal(payload);  // updates UI with final answer
 });
 
 
-
+// Stream ERROR — no pairing
 window.electron?.on('answer:stream-error', (_event, payload) => {
-
   handleStreamError(payload);
-
 });
-
 
 
 
@@ -2023,59 +2009,77 @@ on(docBadge, 'click', async () => {
 
 
 
+// CHAT INPUT HANDLER (ENTER KEY)
 on(chatInput, 'keydown', (e) => {
-
   if (e.key === 'Enter') {
-
     const val = chatInput.value.trim();
-
     if (val) {
 
       revealPanels();
 
-      window.electronAPI.ask(val).then(res => {
-    const final = res?.answer || res?.text || res || "";
-    appendAnswerBlock(final);
-});
+      // Save user message
+      __pairs.push({ role: 'user', text: val });
 
+     window.electronAPI.ask(val).then(res => {
+  const final = res?.answer || res?.text || res || "";
+
+  // Split into multiple assistant turns
+  final.split(/\n+/).forEach(line => {
+    const clean = line.trim();
+    if (!clean) return;
+
+    // Show AI line in UI
+    appendAnswerBlock(clean);
+
+    // Store AI line into pairs
+    __pairs.push({ role: 'assistant', text: clean });
+  });
+});
 
     }
 
     chatInput.value = "";
-
   }
-
 });
 
-// Reveal panels as soon as the user starts typing or focuses the box
-
+// TYPING REVEAL
 on(chatInput, 'input', () => {
-
   if (chatInput.value.trim().length > 0) revealPanels();
-
 });
 
 on(chatInput, 'focus', () => revealPanels());
 
+// CHAT SEND BUTTON
 on(chatSend, 'click', () => {
-
   const val = chatInput.value.trim();
-
   if (val) {
 
     revealPanels();
 
-   window.electronAPI.ask(val).then(res => {
-    const final = res?.answer || res?.text || res || "";
-    appendAnswerBlock(final);
-});
+    // Save user message
+    __pairs.push({ role: 'user', text: val });
 
+   window.electronAPI.ask(val).then(res => {
+  const final = res?.answer || res?.text || res || "";
+
+  // Split into multiple assistant turns
+  final.split(/\n+/).forEach(line => {
+    const clean = line.trim();
+    if (!clean) return;
+
+    // Show AI line in UI
+    appendAnswerBlock(clean);
+
+    // Store AI line into pairs
+    __pairs.push({ role: 'assistant', text: clean });
+  });
+});
 
   }
 
   chatInput.value = "";
-
 });
+
 
 
 
@@ -2295,80 +2299,41 @@ function appendAnswerBlock(text) {
 
 
 // Prepare + send summary object
-
 async function sendSessionSummary() {
-
   const now = Date.now();
-
   const durationMs = now - __sessionStart;
 
-
-
   const transcriptText = document.getElementById("liveTranscript")?.value || "";
-
   const wordCount = countWords(transcriptText);
-
   const answersText = document.getElementById("liveAnswer")?.innerText?.trim() || "";
 
-
-
   const summary = {
-
     duration: msToHuman(durationMs),
-
     questions: __questions,
-
     answers: __answers,
-
     words: wordCount,
-
     transcript: transcriptText,
-
-    responses: __answerLog.slice(0, 50), // cap to reasonable count
-
+    responses: __answerLog.slice(0, 50),
     pairs: __pairs.slice(0, 200),
-
     answersText
-
   };
-
-
 
   debugLog("SUMMARY BUILT:", summary);
 
-  window.windowCtl.endSession(summary);
-
+  // Send full summary to main
+  window.electronAPI.finishSession(summary);
 }
 
 
-
+// Convert milliseconds to readable time
 function msToHuman(ms) {
-
   const sec = Math.floor(ms / 1000);
-
   if (sec < 60) return sec + " sec";
-
   const m = Math.floor(sec / 60);
-
   const s = sec % 60;
-
   return `${m}m ${s}s`;
-
 }
 
-
-
-// ==============================================
-
-//  INTERCEPT OS WINDOW X ΓåÆ send summary
-
-// ==============================================
-
-window.electron.on("trigger:end-session", () => {
-
-  sendSessionSummary();
-
-});
 
 
 

@@ -26,8 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
    // Session + summary
    getSummary: () => ipcRenderer.invoke("get-summary"),
-   endSession: (payload) => ipcRenderer.send("end-session", payload),
-   finishSession: () => ipcRenderer.send("finish-session"),
+   finishSession: (payload) => ipcRenderer.send("finish-session", payload),
    exitApp: () => ipcRenderer.send("exit-app"),
 
    // User session storage
