@@ -51,15 +51,4 @@ jobs:
           path: dist/*.dmg
           if-no-files-found: error
 
-      # ---- OPTIONAL AUTO RELEASE ----
-      - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}
-          name: "Haloryn Build ${{ github.run_number }}"
-          files: |
-            dist/*.exe
-            dist/*.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+     
