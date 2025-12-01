@@ -67,11 +67,10 @@ let pdfParse = null;
 const sharp = require("sharp");
 const { desktopCapturer } = require("electron");
 const http = require("http");
-const { nativeOcr } = require("./ocrNative");
 const IS_DEV = !app.isPackaged;
 
 
-const { triggerSnip } = require("./triggerSnip");
+//const { triggerSnip } = require("./triggerSnip");
 
 // Groq Engines
 const { groqWhisperTranscribe, groqFastAnswer } = require("./groqEngine");
@@ -83,7 +82,7 @@ const { router: smartSearch } = backend.search;
 const { providerSelector: getProviderStats } = backend.utils;
 const { braveApi: BraveApi } = backend.search;
 
-const { initScreenReader } = require("./screenReader");
+//const { initScreenReader } = require("./screenReader");
 
 let lastSessionSummary = null;
 let isSessionActive = false;
@@ -1616,23 +1615,35 @@ ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
   }
 });*/
 
-// Initialize Screen Reader (OCR) IPC
-initScreenReader({
-  ipcMain,
-  log: (msg) => send('log', msg)
-});
+// ---------------- Tesseract OCR (primary OCR engine) ----------------
+const { createWorker } = require("tesseract.js");
+
 ipcMain.on("ocr:image", async (event, imgBuffer) => {
   try {
+    // Save to temp
     const tmpDir = path.join(os.tmpdir(), "haloai-screen");
     fs.mkdirSync(tmpDir, { recursive: true });
     const file = path.join(tmpDir, `ocr_${Date.now()}.png`);
     fs.writeFileSync(file, imgBuffer);
-    const text = await nativeOcr(file);
-    send("ocr:text", text || "");
+
+    // Tesseract v6 worker
+    const worker = await createWorker("eng", {
+      workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
+      corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"),
+      langPath: path.join(__dirname, "tessdata"),
+    });
+
+    const result = await worker.recognize(file);
+    await worker.terminate();
+
+    send("ocr:text", result.data.text || "");
+
   } catch (err) {
     send("ocr:text", "OCR Error: " + err.message);
   }
 });
+
+
 
 
 
@@ -1799,28 +1810,62 @@ ipcMain.handle('search:stats', async () => {
     return { ok: false, error: e.message };
   }
 });
-ipcMain.handle("screenread:start", async () => {
+// screen read Handler
+ipcMain.handle("screenread:run", async () => {
   try {
-    exec("explorer.exe ms-screenclip:");
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-});
+    const { dialog, BrowserWindow, desktopCapturer, clipboard } = require("electron");
 
-ipcMain.handle("screenread:getClipboardImage", async () => {
-  try {
-    const img = clipboard.readImage();
+    const win = BrowserWindow.getFocusedWindow();
 
-    if (img.isEmpty()) {
-      return { ok: false, error: "No image in clipboard" };
+    // 1) Ask user which mode they want
+    const res = await dialog.showMessageBox(win, {
+      type: "question",
+      title: "Screen Read",
+      message: "Choose how to capture the screen:",
+      buttons: ["⛶ Full Screen", "✂ Snip Region", "Cancel"],
+      cancelId: 2,
+      defaultId: 1
+    });
+
+    if (res.response === 2) return { ok: false, cancel: true };
+
+    // ------------------------
+    // OPTION A — FULL SCREEN
+    // ------------------------
+    if (res.response === 0) {
+      const sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 1920, height: 1080 }
+      });
+
+      const full = sources[0]?.thumbnail?.toPNG();
+      if (!full) return { ok: false, error: "Full screenshot failed" };
+
+      return { ok: true, img: full };
     }
 
-    const buffer = img.toPNG();
-    return { ok: true, img: buffer };
+    // ------------------------
+    // OPTION B — SNIP REGION
+    // ------------------------
+    if (res.response === 1) {
+      exec("explorer.exe ms-screenclip:");
 
-  } catch (e) {
-    return { ok: false, error: e.message };
+      // Poll clipboard every 300ms for up to 20 tries
+      let tries = 0;
+      while (tries < 20) {
+        const img = clipboard.readImage();
+        if (!img.isEmpty()) {
+          return { ok: true, img: img.toPNG() };
+        }
+        await new Promise(res => setTimeout(res, 300));
+        tries++;
+      }
+
+      return { ok: false, error: "No image from snipping tool" };
+    }
+
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 });
 

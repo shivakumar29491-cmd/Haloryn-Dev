@@ -1430,95 +1430,45 @@ document.addEventListener("click", (e) => {
 
 //--------------------------------------------------
 
+// ---------------- OCR → Transcript + AI ----------------
 window.electron.on("ocr:text", async (event, textRaw) => {
-
   try {
-
     const text = (textRaw || "").trim();
 
-
-
-    if (!text) {
-
-      appendLog("[screen] no text detected by OCR");
-
+    // 1) If OCR empty → stop here
+    if (!text || text.length < 2) {
+      appendLog("[screen] OCR returned empty → no AI call");
+      window.windowCtl?.restore();
       setState("idle");
-
       return;
-
     }
 
-
-
-    // 1) Show OCR text in Transcript box
-
+    // 2) Put OCR text into transcript area
     if (liveTranscript) {
-
       const existing = (liveTranscript.value || "").trim();
-
       const prefix = "[SCREEN OCR]\n";
 
       liveTranscript.value =
-
         (existing ? existing + "\n\n" : "") + prefix + text;
-
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
-
     }
 
+    // 3) Mark input channel
+    ACTIVE_INPUT = "screenread";
 
-
-    // 2) Ingest OCR text as a temporary document
-
-    try {
-
-      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-
-      const name = `ScreenCapture-${ts}.txt`;
-
-      await window.electron.invoke("doc:ingestText", { name, text });
-
-    } catch (e) {
-
-      appendLog(`[screen] doc ingest error: ${e.message}`);
-
-    }
-
-
-
-    // 3) Ask QA engine to summarize + suggest follow-up questions
-
-  // 3) Store OCR text as screen-read context and answer normally
-
-try {
-
-  lastScreenReadContext = text;
-
-const res = await window.electronAPI.ask(text);
-appendAnswerBlock(res?.answer || res?.text || res || "");
-
-
-} catch (e) {
-
-  appendLog(`[screen] QA error: ${e.message}`);
-
-} finally {
-
-    window.windowCtl?.restore();
-
-    setState("idle");
-
-}
+    // 4) Ask AI normally
+    const res = await window.electronAPI.ask(text);
+    appendAnswerBlock(res?.answer || res?.text || res || "");
 
   } catch (err) {
-
-    appendLog(`[screen] unexpected OCR error: ${err.message || err}`);
-
-    setState("error");
-
+    appendLog(`[screen] OCR handler error: ${err.message}`);
+  } finally {
+    // 5) Always restore window
+    window.windowCtl?.restore();
+    setState("idle");
   }
-
 });
+
 
 
 
