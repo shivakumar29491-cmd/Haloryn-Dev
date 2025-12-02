@@ -39,8 +39,24 @@
 
     <!-- QUICK ACTION CARDS (only Recent Chats) -->
     <div class="card-row">
-  <div class="card-label">Recent Chats</div>
+ <div id="recentChatsRow">
+    <span id="recentChatsLabel">Recent Chats</span>
+
+    <div id="historyControlsInline">
+        <select id="historyRange">
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="week">Last Week</option>
+            <option value="all">All</option>
+        </select>
+
+        <button id="clearHistoryBtn" title="Clear history">🗑️</button>
+    </div>
 </div>
+
+</div>
+
+
 
 
     <!-- TIMELINE -->

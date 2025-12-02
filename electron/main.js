@@ -1705,6 +1705,78 @@ ipcMain.handle("chat:ask", async (_e, prompt) => {
     };
   }
 });
+ipcMain.handle("activity:clear-range", async (_, range) => {
+  try {
+    const file = path.join(app.getPath("userData"), "activityHistory.json");
+    if (!fs.existsSync(file)) return true;
+
+    const raw = fs.readFileSync(file, "utf8");
+    let arr = JSON.parse(raw || "[]");
+
+    const now = new Date();
+
+    // TODAY START
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    ).getTime();
+
+    // YESTERDAY START
+    const yesterdayStart = todayStart - 86400000;
+
+    // ---------- CALENDAR WEEK (MONDAY → SUNDAY) ----------
+    const dayOfWeek = now.getDay(); // 0=Sun,1=Mon,...6=Sat
+
+    // This week's Monday (00:00)
+    const mondayThisWeek = new Date(now);
+    mondayThisWeek.setHours(0, 0, 0, 0);
+    mondayThisWeek.setDate(
+      now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1)
+    );
+
+    // Last week's Monday
+    const mondayLastWeek = new Date(mondayThisWeek);
+    mondayLastWeek.setDate(mondayThisWeek.getDate() - 7);
+
+    // Last week's Sunday
+    const sundayLastWeek = new Date(mondayLastWeek);
+    sundayLastWeek.setDate(mondayLastWeek.getDate() + 6);
+
+    const lastWeekStart = mondayLastWeek.getTime();
+    const lastWeekEnd = sundayLastWeek.getTime() + 86399999;
+    // ------------------------------------------------------
+
+    let filtered = arr;
+
+    if (range === "today") {
+      // Remove today's entries
+      filtered = arr.filter(i => i.ts < todayStart);
+
+    } else if (range === "yesterday") {
+      // Remove yesterday's entries only
+      filtered = arr.filter(i => !(i.ts >= yesterdayStart && i.ts < todayStart));
+
+    } else if (range === "week") {
+      // Remove last calendar week's entries (Mon–Sun)
+      filtered = arr.filter(i => !(i.ts >= lastWeekStart && i.ts <= lastWeekEnd));
+
+    } else if (range === "all") {
+      // Remove everything
+      filtered = [];
+    }
+
+    fs.writeFileSync(file, JSON.stringify(filtered, null, 2));
+    return true;
+
+  } catch (e) {
+    console.error("clear-range failed:", e);
+    return false;
+  }
+});
+
+
+
 
 
 // Phase-10 unified search router endpoint

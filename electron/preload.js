@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    maximize: () => ipcRenderer.invoke('window:maximize'),
    restore:  () => ipcRenderer.invoke('window:restore'),
    close:    () => ipcRenderer.invoke('window:close'),
-
+     clearHistoryByRange: (range) => ipcRenderer.invoke("activity:clear-range", range),
    // Session + summary
    getSummary: () => ipcRenderer.invoke("get-summary"),
    finishSession: (payload) => ipcRenderer.send("finish-session", payload),

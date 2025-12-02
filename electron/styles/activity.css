@@ -199,3 +199,73 @@ body::before {
 
 .timeline-item { padding: 6px 0; color: #dbe7ff; font-size: 13px; }
 .timeline a { color: #dbe7ff; }
+/* Wrap both Recent Chats + Controls in same row */
+#recentChatsRow {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+
+/* Same font style as Recent Chats */
+#recentChatsLabel {
+    font-size: 18px;      /* match your heading size */
+    font-weight: 500;
+    color: #d1d5db;
+}
+
+/* Right side group */
+#historyControlsInline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Dropdown */
+#historyRange {
+    background: #111827;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #1f2937;
+    font-size: 14px;      /* slightly smaller */
+    outline: none;
+}
+
+/* Trash icon (smaller, subtle) */
+#clearHistoryBtn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;          /* SMALLER icon */
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #9ca3af;           /* subtle gray */
+}
+
+#clearHistoryBtn:hover {
+    color: #ffffff;
+    background: #1f2937;
+}
+.activity-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    width: 100%;
+}
+
+.item-left a.session-link {
+    color: #60a5fa; /* your link color */
+    font-size: 14px;
+    text-decoration: none;
+}
+
+.item-right {
+    color: #9ca3af;  /* subtle gray */
+    font-size: 14px;
+    white-space: nowrap;
+    margin-left: 20px;
+}
