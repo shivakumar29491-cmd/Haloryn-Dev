@@ -6,6 +6,45 @@ const MAX_UI_LOG_LINES = 200;       // cap log size to avoid main-thread churn
 
 const debugLog = (...args) => { if (DEBUG_RENDERER) console.log(...args); };
 
+const ACTIVE_CHANNEL = {
+  current: null,
+  queue: []
+};
+
+window.ACTIVE_CHANNEL = ACTIVE_CHANNEL;
+
+function processActiveChannelQueue() {
+  if (ACTIVE_CHANNEL.current || !ACTIVE_CHANNEL.queue.length) return;
+  const job = ACTIVE_CHANNEL.queue.shift();
+  if (!job) return;
+  ACTIVE_CHANNEL.current = job.channel;
+  debugLog(`[channel] start ${job.channel} (queued=${ACTIVE_CHANNEL.queue.length})`);
+
+  Promise.resolve()
+    .then(() => job.task())
+    .then(
+      (result) => job.resolve(result),
+      (error) => job.reject(error)
+    )
+    .finally(() => {
+      debugLog(`[channel] done ${job.channel}`);
+      ACTIVE_CHANNEL.current = null;
+      processActiveChannelQueue();
+    });
+}
+
+function enqueueChannelRequest(channel, task) {
+  if (!channel || typeof task !== "function") {
+    return Promise.reject(new Error("Invalid channel task"));
+  }
+  return new Promise((resolve, reject) => {
+    ACTIVE_CHANNEL.queue.push({ channel, task, resolve, reject });
+    processActiveChannelQueue();
+  });
+}
+
+window.enqueueChannelRequest = enqueueChannelRequest;
+
 
 
 debugLog("LOADED HTML:", window.location.pathname);
@@ -90,7 +129,9 @@ async function unifiedAsk(promptText) {
 
     setState("answering");
 
-    const response = await window.electronAPI.ask(userPrompt);
+    const response = await window.enqueueChannelRequest("chat", () =>
+      window.electronAPI.ask(userPrompt)
+    );
 
     let final = '';
     if (typeof response === "string") {
@@ -357,7 +398,9 @@ function renderActionButtons(text) {
   wrap.appendChild(
     mk("Follow up questions", async () => {
       const q = `Give 2 follow-up questions for: ${text}`;
-      const res = await window.electronAPI.ask(q);
+    const res = await window.enqueueChannelRequest('chat', () =>
+      window.electronAPI.ask(q)
+    );
       appendAnswerBlock(res.answer || res);
     })
   );
@@ -365,7 +408,9 @@ function renderActionButtons(text) {
   wrap.appendChild(
     mk("Detailed explanation", async () => {
       const q = `Give a detailed explanation for: ${text}`;
-      const res = await window.electronAPI.ask(q);
+    const res = await window.enqueueChannelRequest('chat', () =>
+      window.electronAPI.ask(q)
+    );
       appendAnswerBlock(res.answer || res);
     })
   );
@@ -547,7 +592,9 @@ window.__askDirect = async function(prompt) {
     if (!clean) return;
 
     setState("answering");
-    const res = await window.electronAPI.ask(clean);
+    const res = await window.enqueueChannelRequest("chat", () =>
+      window.electronAPI.ask(clean)
+    );
 
     const final = res?.answer || res?.text || res || "";
     appendAnswerBlock(final);
@@ -1491,11 +1538,10 @@ window.electron.on("ocr:text", async (event, textRaw) => {
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
-    // 3) Mark input channel
-    ACTIVE_INPUT = "screenread";
-
-    // 4) Ask AI normally
-    const res = await window.electronAPI.ask(text);
+    // 3) Ask AI normally (screen channel)
+    const res = await window.enqueueChannelRequest("screen", () =>
+      window.electronAPI.ask(text)
+    );
     appendAnswerBlock(res?.answer || res?.text || res || "");
 
   } catch (err) {
@@ -1604,13 +1650,17 @@ function queueSpeechPrompt(text) {
     // USER TURN
     recordSummaryTurn('user', prompt);
 
-    window.electronAPI.ask(prompt).then(res => {
+    window.enqueueChannelRequest("live", async () => {
+      const res = await window.electronAPI.ask(prompt);
       const answerText = (res?.answer || res || "").trim();
 
       appendAnswerBlock(answerText);
 
       // ASSISTANT TURN
-      recordSummaryTurn('assistant', answerText);
+      recordSummaryTurn("assistant", answerText);
+      return res;
+    }).catch((err) => {
+      appendLog(`[live] ask error: ${err?.message || err}`);
     });
 
   }, SPEECH_IDLE_MS);
@@ -2048,7 +2098,7 @@ on(docBadge, 'click', async () => {
 // =====================================================
 // CHAT INPUT HANDLER (ENTER KEY)
 // =====================================================
-on(chatInput, 'keydown', (e) => {
+on(chatInput, 'keydown', async (e) => {
   if (e.key === 'Enter') {
     const val = chatInput.value.trim();
     if (!val) return;
@@ -2058,14 +2108,19 @@ on(chatInput, 'keydown', (e) => {
     // SAVE USER TURN
     recordSummaryTurn('user', val);
 
-    window.electronAPI.ask(val).then(res => {
+    try {
+      const res = await window.enqueueChannelRequest('chat', () =>
+        window.electronAPI.ask(val)
+      );
       const final = (res?.answer || res?.text || res || "").trim();
 
       appendAnswerBlock(final);
 
       // SAVE ASSISTANT TURN
       recordSummaryTurn('assistant', final);
-    });
+    } catch (err) {
+      appendLog(`[chat] keydown ask error: ${err?.message || err}`);
+    }
 
     chatInput.value = "";
   }
@@ -2084,7 +2139,7 @@ on(chatInput, 'focus', () => revealPanels());
 // =====================================================
 // CHAT SEND BUTTON
 // =====================================================
-on(chatSend, 'click', () => {
+on(chatSend, 'click', async () => {
   const val = chatInput.value.trim();
   if (!val) return;
 
@@ -2093,14 +2148,19 @@ on(chatSend, 'click', () => {
   // SAVE USER TURN
   recordSummaryTurn('user', val);
 
-  window.electronAPI.ask(val).then(res => {
+  try {
+    const res = await window.enqueueChannelRequest('chat', () =>
+      window.electronAPI.ask(val)
+    );
     const final = (res?.answer || res?.text || res || "").trim();
 
     appendAnswerBlock(final);
 
     // SAVE ASSISTANT TURN
     recordSummaryTurn('assistant', final);
-  });
+  } catch (err) {
+    appendLog(`[chat] button ask error: ${err?.message || err}`);
+  }
 
   chatInput.value = "";
 });
@@ -2205,11 +2265,17 @@ on(transcribeBtn, 'click', async () => {
 
   if (fileOutput) fileOutput.value += (r?.output || '') + '\n';
 
-   if (r?.output)
-  window.electronAPI.ask(r.output).then(res => {
-    const final = res?.answer || res?.text || res || "";
-    appendAnswerBlock(final);
-  });
+  if (r?.output) {
+    try {
+      const res = await window.enqueueChannelRequest("chat", () =>
+        window.electronAPI.ask(r.output)
+      );
+      const final = res?.answer || res?.text || res || "";
+      appendAnswerBlock(final);
+    } catch (err) {
+      appendLog(`[pre-recorded] ask error: ${err?.message || err}`);
+    }
+  }
 
 
 

@@ -91,7 +91,9 @@ this.transcript?.setAttribute('spellcheck', 'false');
     this.input.value = '';
 
     // 3) Ask backend (no AI bubble to transcript)
-    const rawAns = await window.electron.invoke('chat:ask', q);
+    const rawAns = await window.enqueueChannelRequest('chat', () =>
+      window.electron.invoke('chat:ask', q)
+    );
     let ans = '';
     let streamed = false;
     if (typeof rawAns === 'string') {
