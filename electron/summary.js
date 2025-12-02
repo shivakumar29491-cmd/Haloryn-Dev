@@ -1,7 +1,7 @@
 window.addEventListener("DOMContentLoaded", async () => {
   console.log("SUMMARY SCRIPT ACTIVE");
 
-  // 🔹 Attach Summary Close Handler FIRST (so it always works)
+  // Attach Summary Close Handler
   const closeBtn = document.getElementById("closeSummary");
   console.log("CLOSE BUTTON FOUND:", closeBtn);
 
@@ -14,139 +14,116 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   console.log("SUMMARY DOM READY");
 
-  // 🔹 Fetch summary from main.js
   let summary = null;
+
   try {
-    summary = await window.sessionAPI?.get?.();
+    summary = await window.electronAPI.getSummary();
+    console.log("SUMMARY PAYLOAD:", summary);
+    console.log("SUMMARY PAIRS LENGTH:", summary?.pairs?.length ?? 0);
+
     const detail = document.getElementById("sessionDetail");
     const t = document.getElementById("detailTranscript");
     const r = document.getElementById("detailResponses");
+    console.log("DETAIL ELEMENTS", { detail, transcript: t, responses: r });
 
-    if (detail && t) {
-      const stripLabel = (s = "") =>
-        s.replace(/^(You:|Haloryn:)\s*/i, "").trim();
-
-      // ---------------------------------------------------------------------
-      // 🔥 FIXED PAIRED-CONVERSATION LOGIC
-      // ---------------------------------------------------------------------
-      const pairs = Array.isArray(summary?.pairs) ? summary.pairs : [];
-
-      const frag = document.createDocumentFragment();
-
-      if (pairs && pairs.length) {
-        // 🔥 Use REAL paired data (prompt + response)
-        pairs.forEach((pair) => {
-          const { prompt, response } = pair || {};
-
-          // USER
-          if (prompt && prompt.trim().length > 0) {
-            const userLine = document.createElement("div");
-            userLine.className = "pair-line";
-
-            const userLabel = document.createElement("span");
-            userLabel.className = "label";
-            userLabel.textContent = "You:";
-
-            const userText = document.createElement("span");
-            userText.className = "pair-text";
-            userText.textContent = stripLabel(prompt);
-
-            userLine.appendChild(userLabel);
-            userLine.appendChild(userText);
-            frag.appendChild(userLine);
-          }
-
-          // AI
-          if (response && response.trim().length > 0) {
-            const aiLine = document.createElement("div");
-            aiLine.className = "pair-line";
-
-            const aiLabel = document.createElement("span");
-            aiLabel.className = "label";
-            aiLabel.textContent = "Haloryn:";
-
-            const aiText = document.createElement("span");
-            aiText.className = "pair-text";
-            aiText.textContent = stripLabel(response);
-
-            aiLine.appendChild(aiLabel);
-            aiLine.appendChild(aiText);
-            frag.appendChild(aiLine);
-          }
-        });
-
-      } else {
-        // ---------------------------------------------------------------------
-        // ❌ LEGACY FALLBACK MODE — ONLY USED IF NO pairs[] PROVIDED
-        // ---------------------------------------------------------------------
-
-        const prompts = (summary?.transcript || "")
-          .split(/\r?\n+/)
-          .map((s) => stripLabel(s))
-          .filter(Boolean);
-
-        let respArr = [];
-        if (Array.isArray(summary?.responses) && summary.responses.length) {
-          respArr = summary.responses.slice();
-        } else if (summary?.answersText) {
-          respArr = summary.answersText
-            .split(/\n\s*\n/)
-            .map((s) => s.trim())
-            .filter(Boolean);
-        }
-
-        const maxLen = Math.max(prompts.length, respArr.length);
-        for (let i = 0; i < maxLen; i++) {
-          const userLine = document.createElement("div");
-          userLine.className = "pair-line";
-
-          const userLabel = document.createElement("span");
-          userLabel.className = "label";
-          userLabel.textContent = "You:";
-
-          const userText = document.createElement("span");
-          userText.className = "pair-text";
-          userText.textContent = stripLabel(prompts[i] || "");
-
-          userLine.appendChild(userLabel);
-          userLine.appendChild(userText);
-          frag.appendChild(userLine);
-
-          const aiLine = document.createElement("div");
-          aiLine.className = "pair-line";
-
-          const aiLabel = document.createElement("span");
-          aiLabel.className = "label";
-          aiLabel.textContent = "Haloryn:";
-
-          const aiText = document.createElement("span");
-          aiText.className = "pair-text";
-          aiText.textContent = stripLabel(respArr[i] || "");
-
-          aiLine.appendChild(aiLabel);
-          aiLine.appendChild(aiText);
-          frag.appendChild(aiLine);
-        }
-      }
-
-      // ---------------------------------------------------------------------
-      // RENDER
-      // ---------------------------------------------------------------------
-      t.innerHTML = "";
-
-      if (frag.children.length) {
-        t.appendChild(frag);
-      } else {
-        t.textContent = "(none)";
-      }
-
-      if (r) {
-        r.textContent = "";
-        r.parentElement?.classList.add("hidden");
-      }
-
-      detail.classList.remove("hidden");
+    if (!detail || !t) {
+      console.warn("Missing detail/transcript container", { detail, transcript: t });
+      return;
     }
+
+    const stripLabel = (s = "") =>
+      s.replace(/^(You:|Haloryn:)\s*/i, "").trim();
+
+    const frag = document.createDocumentFragment();
+
+    // ============================================================
+    // BLOCK MODE — Build blocks from summary.pairs[]
+    // Each block = { you: "...", haloryn: "..." }
+    // ============================================================
+
+    const rawPairs = Array.isArray(summary?.pairs) ? summary.pairs : [];
+    const blocks = [];
+
+    // Build blocks: every user + next assistant becomes ONE turn
+    for (let i = 0; i < rawPairs.length; i++) {
+      const turn = rawPairs[i];
+
+      if (turn.role === "user") {
+        const next = rawPairs[i + 1];
+        const userText = stripLabel(turn.text || "");
+        let aiText = "";
+
+        if (next && next.role === "assistant") {
+          aiText = stripLabel(next.text || "");
+          i++; // skip assistant
+        }
+
+        blocks.push({
+          you: userText,
+          haloryn: aiText
+        });
+      }
+    }
+
+    // ============================================================
+    // RENDER BLOCKS
+    // ============================================================
+
+    for (const block of blocks) {
+      // ---------------- USER LINE ----------------
+      const userLine = document.createElement("div");
+      userLine.className = "pair-line";
+
+      const userLabel = document.createElement("span");
+      userLabel.className = "label";
+      userLabel.textContent = "You:";
+
+      const userText = document.createElement("span");
+      userText.className = "pair-text";
+      userText.textContent = block.you;
+
+      userLine.appendChild(userLabel);
+      userLine.appendChild(userText);
+      frag.appendChild(userLine);
+
+      // ---------------- AI LINE ----------------
+      const aiLine = document.createElement("div");
+      aiLine.className = "pair-line";
+
+      const aiLabel = document.createElement("span");
+      aiLabel.className = "label";
+      aiLabel.textContent = "Haloryn:";
+
+      const aiText = document.createElement("span");
+      aiText.className = "pair-text";
+
+      // preserve multi-lines
+      aiText.innerHTML = (block.haloryn || "").replace(/\n/g, "<br>");
+
+      aiLine.appendChild(aiLabel);
+      aiLine.appendChild(aiText);
+      frag.appendChild(aiLine);
+    }
+
+    // ============================================================
+    // RENDER UI
+    // ============================================================
+    t.innerHTML = "";
+    if (frag.children.length) {
+      t.appendChild(frag);
+    } else {
+      const fallbackText =
+        (summary?.transcript || summary?.answersText || "").trim() || "(none)";
+      t.textContent = fallbackText;
+    }
+
+    if (r) {
+      r.textContent = "";
+      r.parentElement?.classList.add("hidden");
+    }
+
+    detail.classList.remove("hidden");
+
   } catch (e) {
     console.error("SUMMARY ERROR:", e);
   }

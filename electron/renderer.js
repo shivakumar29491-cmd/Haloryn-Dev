@@ -11,10 +11,22 @@ const debugLog = (...args) => { if (DEBUG_RENDERER) console.log(...args); };
 debugLog("LOADED HTML:", window.location.pathname);
 
 
-
 document.addEventListener("DOMContentLoaded", () => {
 
     debugLog("DOM READY");
+
+    // ⭐ REQUIRED ⭐
+    window.electronAPI.onTriggerFinishSession(() => {
+    console.log("FINISH SESSION → building summary");
+    sendSessionSummary();
+});
+
+
+
+});
+
+
+
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -120,7 +132,19 @@ const transcriptContainer = document.getElementById('transcript-container');
 const answerBox = document.querySelector('.answer-box');
 
 window.__useGroqFastMode = true;
+let __turns = [];
 
+function recordSummaryTurn(role, text) {
+  if (!role) return;
+  const normalized = String(text || "").trim();
+  if (!normalized) return;
+  const entry = { role, text: normalized };
+  const last = __turns[__turns.length - 1];
+  if (last?.role === entry.role && last?.text === entry.text) return;
+  __turns.push(entry);
+}
+
+window.__recordSummaryTurn = recordSummaryTurn;
 // collapse transcript/answer until user interacts
 
 if (transcriptContainer) transcriptContainer.classList.add('panel-collapsed');
@@ -474,35 +498,48 @@ function finalizeStreamingAnswer(finalText) {
     clearTimeout(chunkTimer);
     chunkTimer = null;
   }
+
   if (activeStream) {
     let textCandidate = finalText || activeStream.text || '';
     let finalNorm = normalizeAnswer(textCandidate, activeStream.maxLen);
+
     if (!finalNorm) {
       finalNorm = 'No answer (stream returned empty).';
     }
+
+    // Update internal ALL_ANSWERS list
     if (ALL_ANSWERS.length) {
       ALL_ANSWERS[ALL_ANSWERS.length - 1].text = finalNorm;
     } else if (finalNorm) {
       ALL_ANSWERS.push({ text: finalNorm, maxLen: activeStream.maxLen });
     }
-    activeStream = null;
 
+    // -------------------------------------------------------
+    // NEW: Save to the last turn block
+    // -------------------------------------------------------
+    if (__turns.length > 0) {
+      __turns[__turns.length - 1].haloryn = finalNorm;
+    }
+
+    activeStream = null;
     chunkBuffer = '';
 
+    // Update UI
     renderAnswersVirtualized();
-
-
     return;
-
   }
 
+  // Non-stream fallback
   if (finalText) {
+    appendAnswerBlock(finalText);
 
-    appendAnswerBlock(finalText, DEFAULT_MAX_LEN);
-
+    // Also save fallback to last turn
+    if (__turns.length > 0) {
+      __turns[__turns.length - 1].haloryn = finalText;
+    }
   }
-
 }
+
 
 window.__askDirect = async function(prompt) {
   try {
@@ -1562,23 +1599,23 @@ function queueSpeechPrompt(text) {
     _speechBuffer = [];
     _speechIdleTimer = null;
 
-    // Reject empty/whitespace/1-char noise
     if (!prompt || prompt.replace(/\s+/g, '').length < 2) return;
 
-    // Pair user
-    __pairs.push({ role: 'user', text: prompt });
+    // USER TURN
+    recordSummaryTurn('user', prompt);
 
     window.electronAPI.ask(prompt).then(res => {
-      const answerText = res?.answer || res;
+      const answerText = (res?.answer || res || "").trim();
 
       appendAnswerBlock(answerText);
 
-      // Pair assistant
-      __pairs.push({ role: 'assistant', text: answerText });
+      // ASSISTANT TURN
+      recordSummaryTurn('assistant', answerText);
     });
 
   }, SPEECH_IDLE_MS);
 }
+
 
 
 // RESET SPEECH QUEUE
@@ -1689,16 +1726,16 @@ window.electron?.on('answer:stream-chunk', (_event, payload) => {
 
 // Stream FINAL — REAL ANSWER HERE
 window.electron?.on('answer:stream-final', (_event, payload) => {
-
   const finalText = payload?.text || payload;
 
-  // 🟩 Pair assistant ONCE — only here
   if (finalText) {
-    __pairs.push({ role: 'assistant', text: finalText });
+    recordSummaryTurn('assistant', finalText);
   }
 
-  handleStreamFinal(payload);  // updates UI with final answer
+  handleStreamFinal(payload);
 });
+
+
 
 
 // Stream ERROR — no pairing
@@ -2007,78 +2044,69 @@ on(docBadge, 'click', async () => {
 
 });
 
-
-
 // CHAT INPUT HANDLER (ENTER KEY)
+// =====================================================
+// CHAT INPUT HANDLER (ENTER KEY)
+// =====================================================
 on(chatInput, 'keydown', (e) => {
   if (e.key === 'Enter') {
     const val = chatInput.value.trim();
-    if (val) {
+    if (!val) return;
 
-      revealPanels();
+    revealPanels();
 
-      // Save user message
-      __pairs.push({ role: 'user', text: val });
+    // SAVE USER TURN
+    recordSummaryTurn('user', val);
 
-     window.electronAPI.ask(val).then(res => {
-  const final = res?.answer || res?.text || res || "";
+    window.electronAPI.ask(val).then(res => {
+      const final = (res?.answer || res?.text || res || "").trim();
 
-  // Split into multiple assistant turns
-  final.split(/\n+/).forEach(line => {
-    const clean = line.trim();
-    if (!clean) return;
+      appendAnswerBlock(final);
 
-    // Show AI line in UI
-    appendAnswerBlock(clean);
-
-    // Store AI line into pairs
-    __pairs.push({ role: 'assistant', text: clean });
-  });
-});
-
-    }
+      // SAVE ASSISTANT TURN
+      recordSummaryTurn('assistant', final);
+    });
 
     chatInput.value = "";
   }
 });
 
-// TYPING REVEAL
+
+
+// TYPING REVEAL LOGIC
 on(chatInput, 'input', () => {
   if (chatInput.value.trim().length > 0) revealPanels();
 });
 
 on(chatInput, 'focus', () => revealPanels());
 
+
+// =====================================================
 // CHAT SEND BUTTON
+// =====================================================
 on(chatSend, 'click', () => {
   const val = chatInput.value.trim();
-  if (val) {
+  if (!val) return;
 
-    revealPanels();
+  revealPanels();
 
-    // Save user message
-    __pairs.push({ role: 'user', text: val });
+  // SAVE USER TURN
+  recordSummaryTurn('user', val);
 
-   window.electronAPI.ask(val).then(res => {
-  const final = res?.answer || res?.text || res || "";
+  window.electronAPI.ask(val).then(res => {
+    const final = (res?.answer || res?.text || res || "").trim();
 
-  // Split into multiple assistant turns
-  final.split(/\n+/).forEach(line => {
-    const clean = line.trim();
-    if (!clean) return;
+    appendAnswerBlock(final);
 
-    // Show AI line in UI
-    appendAnswerBlock(clean);
-
-    // Store AI line into pairs
-    __pairs.push({ role: 'assistant', text: clean });
+    // SAVE ASSISTANT TURN
+    recordSummaryTurn('assistant', final);
   });
-});
-
-  }
 
   chatInput.value = "";
 });
+
+
+
 
 
 
@@ -2262,7 +2290,7 @@ let __answers = 0;
 
 const __answerLog = [];
 
-const __pairs = []; // { prompt, response }
+
 
 
 
@@ -2307,6 +2335,14 @@ async function sendSessionSummary() {
   const wordCount = countWords(transcriptText);
   const answersText = document.getElementById("liveAnswer")?.innerText?.trim() || "";
 
+  console.log("DEBUG __turns BEFORE SUMMARY →", __turns);
+
+  // ✅ FIXED GUARD — allow index.html or indexRoot.html
+  if (!window.location.pathname.includes("index")) {
+    console.warn("sendSessionSummary called in non-live window — ignored");
+    return;
+  }
+
   const summary = {
     duration: msToHuman(durationMs),
     questions: __questions,
@@ -2314,7 +2350,10 @@ async function sendSessionSummary() {
     words: wordCount,
     transcript: transcriptText,
     responses: __answerLog.slice(0, 50),
-    pairs: __pairs.slice(0, 200),
+
+    // NEW: block-based system
+    pairs: __turns.slice(0, 200),
+
     answersText
   };
 
@@ -2333,13 +2372,3 @@ function msToHuman(ms) {
   const s = sec % 60;
   return `${m}m ${s}s`;
 }
-
-
-
-
-});
-
-
-
-
-

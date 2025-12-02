@@ -82,6 +82,8 @@ this.transcript?.setAttribute('spellcheck', 'false');
     const q = this.input?.value?.trim();
     if (!q) return;
 
+    window.__recordSummaryTurn?.('user', q);
+
     // 1) Mirror typed text into the single Transcript sink
     this._appendToTranscript(`You: ${q}`);
 
@@ -108,24 +110,25 @@ this.transcript?.setAttribute('spellcheck', 'false');
     }
 
     // 4) Answers go ONLY to the Answer area (textarea or div)
-    if (this.answer && typeof ans === 'string') {
-      const s = ans.trim();
-      if (s && !this._isStatusyBanner(s)) {
-        if (this.answer.tagName === 'DIV') {
-          // New UI: div-based answer log
-          const entry = document.createElement('div');
-          entry.className = 'answer-block answer-entry';
-          entry.textContent = s;
-          this.answer.appendChild(entry);
-          this.answer.scrollTop = this.answer.scrollHeight;
-        } else {
-          // Legacy textarea-based UI
-          const sep = this.answer.value ? '\n---\n' : '';
-          this.answer.value = (this.answer.value || '') + sep + s;
-          this.answer.scrollTop = this.answer.scrollHeight;
+      if (this.answer && typeof ans === 'string') {
+        const s = ans.trim();
+        if (s && !this._isStatusyBanner(s)) {
+          if (this.answer.tagName === 'DIV') {
+            // New UI: div-based answer log
+            const entry = document.createElement('div');
+            entry.className = 'answer-block answer-entry';
+            entry.textContent = s;
+            this.answer.appendChild(entry);
+            this.answer.scrollTop = this.answer.scrollHeight;
+          } else {
+            // Legacy textarea-based UI
+            const sep = this.answer.value ? '\n---\n' : '';
+            this.answer.value = (this.answer.value || '') + sep + s;
+            this.answer.scrollTop = this.answer.scrollHeight;
+          }
+          window.__recordSummaryTurn?.('assistant', s);
         }
       }
-    }
 
   }
 

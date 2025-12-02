@@ -28,6 +28,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
    getSummary: () => ipcRenderer.invoke("get-summary"),
    finishSession: (payload) => ipcRenderer.send("finish-session", payload),
    exitApp: () => ipcRenderer.send("exit-app"),
+   onTriggerFinishSession: (cb) => {
+       if (typeof cb !== "function") return () => {};
+       const listener = (_event, ...args) => cb(...args);
+       ipcRenderer.on("trigger:end-session", listener);
+       return () => ipcRenderer.removeListener("trigger:end-session", listener);
+   },
 
    // User session storage
    getUserSession: () => ipcRenderer.invoke("get-user-session"),
@@ -46,9 +52,9 @@ chatAsk: (prompt) => ipcRenderer.invoke("chat:ask", prompt),
 });
 
 // Summary page API
-contextBridge.exposeInMainWorld('sessionAPI', {
-    get: () => ipcRenderer.invoke("get-summary")
-});
+//contextBridge.exposeInMainWorld('sessionAPI', {
+  //  get: () => ipcRenderer.invoke("get-summary")
+//});
 
 // Companion APIs
 contextBridge.exposeInMainWorld('companion', {
