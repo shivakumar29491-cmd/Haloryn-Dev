@@ -1486,20 +1486,24 @@ ipcMain.on("start-session", () => {
 
 ipcMain.on("finish-session", (e, summary) => {
   isSessionActive = false;
+
+  // Store summary in memory
   lastSessionSummary = summary;
+
   try {
     appendActivityHistory({
       ts: Date.now(),
-      summary: summary || {}
+      summary: summary || {},
     });
-  } catch {}
+  } catch (err) {
+    console.error("ACTIVITY SAVE FAILED:", err);
+  }
 
+  // Load summary page
   win.loadFile(path.join(__dirname, "summaryRoot.html"));
 });
 
-ipcMain.on("exit-app", () => {
-  app.quit();
-});
+
 
 
 ipcMain.handle("get-summary", () => {
@@ -1880,16 +1884,16 @@ ipcMain.handle("window:close", async () => {
     try { send('trigger:end-session'); } catch {}
 
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("open-summary");
+      mainWindow.webContents.send("finishSession");  
     }
 
-    // ❗ IMPORTANT: Do NOT quit — let summary page stay open
     return;
   }
 
-  // If NOT in a session → now quit for real
   app.quit();
 });
+
+
 
 
 ipcMain.handle('window:restore', () => {

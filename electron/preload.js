@@ -46,9 +46,9 @@ chatAsk: (prompt) => ipcRenderer.invoke("chat:ask", prompt),
 });
 
 // Summary page API
-contextBridge.exposeInMainWorld('sessionAPI', {
-    get: () => ipcRenderer.invoke("get-summary")
-});
+//contextBridge.exposeInMainWorld('sessionAPI', {
+  //  get: () => ipcRenderer.invoke("get-summary")
+//});
 
 // Companion APIs
 contextBridge.exposeInMainWorld('companion', {
