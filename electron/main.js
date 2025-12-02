@@ -1965,6 +1965,10 @@ ipcMain.handle("window:close", async () => {
   app.quit();
 });
 
+ipcMain.on("exit-app", () => {
+  app.quit();
+});
+
 
 
 

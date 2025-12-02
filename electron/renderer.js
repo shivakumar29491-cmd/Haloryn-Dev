@@ -133,6 +133,18 @@ const answerBox = document.querySelector('.answer-box');
 
 window.__useGroqFastMode = true;
 let __turns = [];
+
+function recordSummaryTurn(role, text) {
+  if (!role) return;
+  const normalized = String(text || "").trim();
+  if (!normalized) return;
+  const entry = { role, text: normalized };
+  const last = __turns[__turns.length - 1];
+  if (last?.role === entry.role && last?.text === entry.text) return;
+  __turns.push(entry);
+}
+
+window.__recordSummaryTurn = recordSummaryTurn;
 // collapse transcript/answer until user interacts
 
 if (transcriptContainer) transcriptContainer.classList.add('panel-collapsed');
@@ -1590,7 +1602,7 @@ function queueSpeechPrompt(text) {
     if (!prompt || prompt.replace(/\s+/g, '').length < 2) return;
 
     // USER TURN
-    __turns.push({ role: 'user', text: prompt });
+    recordSummaryTurn('user', prompt);
 
     window.electronAPI.ask(prompt).then(res => {
       const answerText = (res?.answer || res || "").trim();
@@ -1598,7 +1610,7 @@ function queueSpeechPrompt(text) {
       appendAnswerBlock(answerText);
 
       // ASSISTANT TURN
-      __turns.push({ role: 'assistant', text: answerText });
+      recordSummaryTurn('assistant', answerText);
     });
 
   }, SPEECH_IDLE_MS);
@@ -1717,7 +1729,7 @@ window.electron?.on('answer:stream-final', (_event, payload) => {
   const finalText = payload?.text || payload;
 
   if (finalText) {
-    __turns.push({ role: 'assistant', text: finalText });
+    recordSummaryTurn('assistant', finalText);
   }
 
   handleStreamFinal(payload);
@@ -2044,7 +2056,7 @@ on(chatInput, 'keydown', (e) => {
     revealPanels();
 
     // SAVE USER TURN
-    __turns.push({ role: 'user', text: val });
+    recordSummaryTurn('user', val);
 
     window.electronAPI.ask(val).then(res => {
       const final = (res?.answer || res?.text || res || "").trim();
@@ -2052,7 +2064,7 @@ on(chatInput, 'keydown', (e) => {
       appendAnswerBlock(final);
 
       // SAVE ASSISTANT TURN
-      __turns.push({ role: 'assistant', text: final });
+      recordSummaryTurn('assistant', final);
     });
 
     chatInput.value = "";
@@ -2079,7 +2091,7 @@ on(chatSend, 'click', () => {
   revealPanels();
 
   // SAVE USER TURN
-  __turns.push({ role: 'user', text: val });
+  recordSummaryTurn('user', val);
 
   window.electronAPI.ask(val).then(res => {
     const final = (res?.answer || res?.text || res || "").trim();
@@ -2087,7 +2099,7 @@ on(chatSend, 'click', () => {
     appendAnswerBlock(final);
 
     // SAVE ASSISTANT TURN
-    __turns.push({ role: 'assistant', text: final });
+    recordSummaryTurn('assistant', final);
   });
 
   chatInput.value = "";

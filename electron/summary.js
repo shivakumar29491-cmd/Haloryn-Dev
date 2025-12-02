@@ -18,13 +18,18 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   try {
     summary = await window.electronAPI.getSummary();
-
+    console.log("SUMMARY PAYLOAD:", summary);
+    console.log("SUMMARY PAIRS LENGTH:", summary?.pairs?.length ?? 0);
 
     const detail = document.getElementById("sessionDetail");
     const t = document.getElementById("detailTranscript");
     const r = document.getElementById("detailResponses");
+    console.log("DETAIL ELEMENTS", { detail, transcript: t, responses: r });
 
-    if (!detail || !t) return;
+    if (!detail || !t) {
+      console.warn("Missing detail/transcript container", { detail, transcript: t });
+      return;
+    }
 
     const stripLabel = (s = "") =>
       s.replace(/^(You:|Haloryn:)\s*/i, "").trim();
@@ -107,7 +112,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (frag.children.length) {
       t.appendChild(frag);
     } else {
-      t.textContent = "(none)";
+      const fallbackText =
+        (summary?.transcript || summary?.answersText || "").trim() || "(none)";
+      t.textContent = fallbackText;
     }
 
     if (r) {
