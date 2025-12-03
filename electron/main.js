@@ -473,6 +473,7 @@ function applyIncognito(flag) {
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
+    center: true,
     width: 1200,
     height: 900,
     minWidth: 1100,
@@ -493,7 +494,9 @@ async function createWindow() {
     }
   });
 
-win = mainWindow;
+  mainWindow.setMovable(false);
+
+  win = mainWindow;
 ensureTray();
 applyIncognito(false);
 // ==========================================
