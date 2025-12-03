@@ -6,6 +6,10 @@ let isDragging = false;
 
 const box = document.getElementById("selectionBox");
 
+window.addEventListener("load", () => {
+  window.focus();
+});
+
 window.addEventListener("mousedown", (e) => {
   isDragging = true;
   startX = e.clientX;
@@ -37,13 +41,26 @@ window.addEventListener("mouseup", (e) => {
   isDragging = false;
 
   const rect = {
-    x: parseInt(box.style.left),
-    y: parseInt(box.style.top),
-    width: parseInt(box.style.width),
-    height: parseInt(box.style.height)
+    x: Math.max(0, parseInt(box.style.left) || 0),
+    y: Math.max(0, parseInt(box.style.top) || 0),
+    width: Math.max(0, parseInt(box.style.width) || 0),
+    height: Math.max(0, parseInt(box.style.height) || 0)
   };
 
-  ipcRenderer.send("screenread:selection", rect);
+  box.style.display = "none";
+
+  if (rect.width > 4 && rect.height > 4) {
+    ipcRenderer.send("screenread:selection", rect);
+  } else {
+    ipcRenderer.send("screenread:selection-cancel");
+  }
 
   window.close(); // closes overlay window
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Escape") {
+    ipcRenderer.send("screenread:selection-cancel");
+    window.close();
+  }
 });
