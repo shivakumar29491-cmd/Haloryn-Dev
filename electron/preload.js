@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
    // User session storage
    getUserSession: () => ipcRenderer.invoke("get-user-session"),
-   saveUserSession: (data) => ipcRenderer.send("save-user-session", data),
+   saveUserSession: (data) => ipcRenderer.invoke("save-user-session", data),
 
    // Navigation
    loadActivity: () => ipcRenderer.invoke("load-activity"),

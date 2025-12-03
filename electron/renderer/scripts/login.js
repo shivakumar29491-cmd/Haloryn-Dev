@@ -146,7 +146,7 @@ attachLoading(trialBtn, async () => {
   try {
     const redirectUser = await resolveRedirectLogin();
     if (redirectUser) {
-      window.electronAPI?.saveUserSession({
+      await window.electronAPI?.saveUserSession({
         email: redirectUser?.email || "",
         phone: "",
         verified: true,

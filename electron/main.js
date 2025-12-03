@@ -260,6 +260,36 @@ const userDataPath = path.join(os.tmpdir(), "haloryn-user");
 const historyPath = path.join(userDataPath, "activityHistory.json");
 const userDataFile = path.join(userDataPath, "userData.json");
 const cachePath = path.join(userDataPath, "Cache");
+const sessionPath = path.join(userDataPath, "session.json");
+
+const HISTORY_ANON_OWNER = "__anon__";
+let currentHistoryOwner = HISTORY_ANON_OWNER;
+
+function determineHistoryOwner(session = {}) {
+  if (!session || typeof session !== "object") return null;
+  if (session.ownerId) return session.ownerId;
+  if (session.email) return String(session.email).trim().toLowerCase();
+  if (session.phone) return String(session.phone).trim();
+  if (session.provider) return `provider:${session.provider}`;
+  return null;
+}
+
+function setHistoryOwnerFromSession(session = {}) {
+  const ownerId = determineHistoryOwner(session);
+  currentHistoryOwner = ownerId || HISTORY_ANON_OWNER;
+  return currentHistoryOwner;
+}
+
+function readSavedSession() {
+  try {
+    const raw = fs.readFileSync(sessionPath, "utf8");
+    return JSON.parse(raw || "{}");
+  } catch {
+    return {};
+  }
+}
+
+setHistoryOwnerFromSession(readSavedSession());
 
 let tray = null;
 let incognitoOn = false;
@@ -302,7 +332,12 @@ let rendererServerPort = null;
 
 function readActivityHistory() {
   try {
-    return JSON.parse(fs.readFileSync(historyPath, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(historyPath, "utf8") || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => ({
+      owner: item?.owner || HISTORY_ANON_OWNER,
+      ...item
+    }));
   } catch {
     return [];
   }
@@ -310,9 +345,12 @@ function readActivityHistory() {
 
 function appendActivityHistory(entry) {
   try {
+    const owner = currentHistoryOwner || HISTORY_ANON_OWNER;
     const history = readActivityHistory();
-    history.unshift(entry);
+    const record = { owner, ...entry };
+    history.unshift(record);
     const trimmed = history.slice(0, 100);
+    fs.mkdirSync(userDataPath, { recursive: true });
     fs.writeFileSync(historyPath, JSON.stringify(trimmed, null, 2));
   } catch (e) {
     console.warn("[history] write failed", e?.message);
@@ -381,18 +419,31 @@ try { app.commandLine.appendSwitch("disable-gpu"); } catch {}
 try { app.commandLine.appendSwitch("disable-gpu-compositing"); } catch {}
 
 
-ipcMain.on("save-user-session", (event, data) => {
-  const sessionPath = path.join(app.getPath("userData"), "session.json");
-  fs.writeFileSync(sessionPath, JSON.stringify(data));
+function persistUserSession(data = {}, options = {}) {
+  const { replace = false } = options;
+  const base = replace ? {} : readSavedSession();
+  const merged = { ...base, ...data };
+  const ownerId = determineHistoryOwner(merged);
+  if (ownerId) {
+    merged.ownerId = ownerId;
+  }
+  try {
+    fs.mkdirSync(userDataPath, { recursive: true });
+    fs.writeFileSync(sessionPath, JSON.stringify(merged, null, 2));
+  } catch (err) {
+    console.error("[session] save failed:", err?.message);
+  }
+  setHistoryOwnerFromSession(merged);
+  return merged;
+}
+
+ipcMain.handle("save-user-session", (_event, data) => {
+  persistUserSession(data);
+  return { ok: true };
 });
 
 ipcMain.handle("get-user-session", () => {
-  const sessionPath = path.join(app.getPath("userData"), "session.json");
-  try {
-    return JSON.parse(fs.readFileSync(sessionPath));
-  } catch {
-    return {};
-  }
+  return readSavedSession();
 });
 ipcMain.handle("nav:loadLocalFile", async (_e, file) => {
     try {
@@ -598,6 +649,8 @@ applyIncognito(false);
   // PHASE 14 — SUBSCRIPTION CHECK (SAFE INSERT)
   // ==========================================
   const ENABLE_SUBSCRIPTIONS = process.env.ENABLE_SUBSCRIPTIONS === "true";
+  const savedSession = readSavedSession();
+  setHistoryOwnerFromSession(savedSession);
 
   if (ENABLE_SUBSCRIPTIONS && process.env.NODE_ENV !== "development") {
     try {
@@ -608,10 +661,15 @@ applyIncognito(false);
       if (!status.valid) {
         return mainWindow.loadFile(path.join(__dirname, "licensePopup.html"));
       }
-    } catch (err) {
-      console.error("[Subscription Check Error]", err);
-      return mainWindow.loadFile(path.join(__dirname, "licensePopup.html"));
-    }
+  } catch (err) {
+    console.error("[Subscription Check Error]", err);
+    return mainWindow.loadFile(path.join(__dirname, "licensePopup.html"));
+  }
+}
+
+  if (savedSession?.verified) {
+    mainWindow.loadFile(path.join(__dirname, "activityRoot.html"));
+    return;
   }
 
   // Always land on login; app navigation happens after explicit login or test bypass
@@ -1687,11 +1745,11 @@ ipcMain.handle("summary:show-entry", async (_e, summary) => {
   return { ok: false, error: "window unavailable" };
 });
 ipcMain.handle("activity:history", () => {
-  return readActivityHistory();
+  const owner = currentHistoryOwner || HISTORY_ANON_OWNER;
+  return readActivityHistory().filter((entry) => entry.owner === owner);
 });
 ipcMain.handle("logout", async () => {
-  const sessionPath = path.join(app.getPath("userData"), "session.json");
-  try { fs.writeFileSync(sessionPath, "{}"); } catch {}
+  persistUserSession({}, { replace: true });
   isSessionActive = false;
   try {
     const port = await startRendererServer();
@@ -1720,11 +1778,10 @@ ipcMain.handle("incognito:set", async (_e, flag) => {
 ipcMain.handle("incognito:get", async () => ({ ok: true, incognito: incognitoOn }));
 
 ipcMain.handle("logout:clear", async () => {
-  const sessionPath = path.join(app.getPath("userData"), "session.json");
-  try { fs.writeFileSync(sessionPath, "{}"); } catch {}
+  persistUserSession({}, { replace: true });
   const port = await startRendererServer();
   if (win && !win.isDestroyed()) {
-    await win.loadFile(path.join(__dirname, "login.html"));
+    await win.loadURL(`http://127.0.0.1:${port}/login.html`);
   }
   return { ok: true };
 });
@@ -1877,60 +1934,50 @@ ipcMain.handle("activity:clear-range", async (_, range) => {
     if (!fs.existsSync(file)) return true;
 
     const raw = fs.readFileSync(file, "utf8");
-    let arr = JSON.parse(raw || "[]");
+    const parsed = JSON.parse(raw || "[]");
+    const arr = Array.isArray(parsed) ? parsed : [];
+    const owner = currentHistoryOwner || HISTORY_ANON_OWNER;
 
     const now = new Date();
-
-    // TODAY START
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    ).getTime();
-
-    // YESTERDAY START
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const yesterdayStart = todayStart - 86400000;
-
-    // ---------- CALENDAR WEEK (MONDAY → SUNDAY) ----------
-    const dayOfWeek = now.getDay(); // 0=Sun,1=Mon,...6=Sat
-
-    // This week's Monday (00:00)
+    const dayOfWeek = now.getDay();
     const mondayThisWeek = new Date(now);
     mondayThisWeek.setHours(0, 0, 0, 0);
-    mondayThisWeek.setDate(
-      now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1)
-    );
-
-    // Last week's Monday
+    mondayThisWeek.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
     const mondayLastWeek = new Date(mondayThisWeek);
     mondayLastWeek.setDate(mondayThisWeek.getDate() - 7);
-
-    // Last week's Sunday
     const sundayLastWeek = new Date(mondayLastWeek);
     sundayLastWeek.setDate(mondayLastWeek.getDate() + 6);
-
     const lastWeekStart = mondayLastWeek.getTime();
     const lastWeekEnd = sundayLastWeek.getTime() + 86399999;
-    // ------------------------------------------------------
 
-    let filtered = arr;
+    const sanitized = arr.map((item) => ({
+      owner: item?.owner || HISTORY_ANON_OWNER,
+      ...item
+    }));
 
-    if (range === "today") {
-      // Remove today's entries
-      filtered = arr.filter(i => i.ts < todayStart);
+    const shouldRemove = (ts = 0) => {
+      if (range === "today") {
+        return ts >= todayStart;
+      }
+      if (range === "yesterday") {
+        return ts >= yesterdayStart && ts < todayStart;
+      }
+      if (range === "week") {
+        return ts >= lastWeekStart && ts <= lastWeekEnd;
+      }
+      if (range === "all") {
+        return true;
+      }
+      return false;
+    };
 
-    } else if (range === "yesterday") {
-      // Remove yesterday's entries only
-      filtered = arr.filter(i => !(i.ts >= yesterdayStart && i.ts < todayStart));
-
-    } else if (range === "week") {
-      // Remove last calendar week's entries (Mon–Sun)
-      filtered = arr.filter(i => !(i.ts >= lastWeekStart && i.ts <= lastWeekEnd));
-
-    } else if (range === "all") {
-      // Remove everything
-      filtered = [];
-    }
+    const filtered = sanitized.filter((entry) => {
+      if (entry.owner !== owner) return true;
+      const ts = Number(entry.ts || 0);
+      return !shouldRemove(ts);
+    });
 
     fs.writeFileSync(file, JSON.stringify(filtered, null, 2));
     return true;
