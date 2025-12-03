@@ -1548,6 +1548,8 @@ const btnStop  = pickFirst($('#stopBtn'),  $('[data-action="stop"]'),  $('[title
 
 
 const liveTranscript = $('#liveTranscript') || document.querySelector('#tab-live textarea');
+const liveTranscriptStream = document.getElementById('liveTranscriptStream');
+const liveTranscriptStreamText = document.getElementById('liveTranscriptStreamText');
 
 const liveStatus = $('#liveStatus');
 
@@ -1660,6 +1662,65 @@ function setTranscriptText(s) {
   }
 
 }
+
+const LIVE_STREAM_CHUNK_WORDS = 8;
+const LIVE_STREAM_INTERVAL_MS = 120;
+const LIVE_STREAM_QUEUE_LIMIT = 160;
+const LIVE_STREAM_PULSE_MS = 200;
+
+let liveStreamQueue = [];
+let liveStreamTimer = null;
+
+function updateLiveTranscriptStream(text, active = true) {
+  if (!liveTranscriptStreamText) return;
+  const payload = active && text ? `You: ${text}` : (text || 'Listening…');
+  liveTranscriptStreamText.textContent = payload;
+  if (liveTranscriptStream && active) {
+    liveTranscriptStream.classList.add('is-active');
+    setTimeout(() => liveTranscriptStream?.classList.remove('is-active'), LIVE_STREAM_PULSE_MS);
+  }
+}
+
+function resetLiveTranscriptStream(placeholder = 'Listening…') {
+  liveStreamQueue = [];
+  if (liveStreamTimer) {
+    clearTimeout(liveStreamTimer);
+    liveStreamTimer = null;
+  }
+  updateLiveTranscriptStream(placeholder, false);
+}
+
+function queueLiveTranscriptWords(text) {
+  const words = String(text || '').split(/\s+/).map(w => w.trim()).filter(Boolean);
+  if (!words.length) return;
+  liveStreamQueue.push(...words);
+  if (liveStreamQueue.length > LIVE_STREAM_QUEUE_LIMIT) {
+    liveStreamQueue.splice(0, liveStreamQueue.length - LIVE_STREAM_QUEUE_LIMIT);
+  }
+  if (!liveStreamTimer) {
+    flushLiveTranscriptStream();
+  }
+}
+
+function flushLiveTranscriptStream() {
+  if (!liveTranscriptStreamText) {
+    liveStreamQueue = [];
+    liveStreamTimer = null;
+    return;
+  }
+
+  if (!liveStreamQueue.length) {
+    liveStreamTimer = null;
+    return;
+  }
+
+  const chunkWords = liveStreamQueue.splice(0, LIVE_STREAM_CHUNK_WORDS);
+  const joined = chunkWords.join(' ');
+  updateLiveTranscriptStream(joined, !!joined);
+  liveStreamTimer = setTimeout(flushLiveTranscriptStream, LIVE_STREAM_INTERVAL_MS);
+}
+
+resetLiveTranscriptStream();
 
 //---------------------------------------------
 
@@ -1953,6 +2014,7 @@ on(btnStart, 'click', async () => {
       setState('listening');
 
       setTranscriptText('ListeningΓÇª');
+      resetLiveTranscriptStream();
 
     } else {
 
@@ -1981,6 +2043,7 @@ on(btnStop, 'click', async () => {
   try { await window.electron?.invoke('live:stop'); } catch {}
 
   setState('idle');
+  resetLiveTranscriptStream('Listening…');
   resetSpeechQueue();
   document.body.classList.remove('companion-on');
   btnStart?.classList.remove('recording');
@@ -2068,6 +2131,7 @@ window.electron.on("live:chunk", (_e, text) => {
   const raw = text.trim();
 
   appendTranscriptLine(`You: ${raw}`);
+  queueLiveTranscriptWords(raw);
 
   queueSpeechPrompt(raw);
 

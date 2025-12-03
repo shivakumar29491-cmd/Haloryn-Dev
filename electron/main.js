@@ -1672,6 +1672,7 @@ function startChunk(){
         const text=(await runWhisper(outfile))||'';
         const normalized = text.replace(/\s+/g,' ').trim();
         if(normalized){
+          send('live:chunk', normalized);
           // Append each recognized utterance as its own line (no concatenated run-on)
           live.transcript += (live.transcript ? '\n' : '') + normalized;
           // keep transcript lightweight: cap to last 8000 chars

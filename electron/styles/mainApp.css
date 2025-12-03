@@ -282,6 +282,37 @@ button:hover{filter:brightness(1.1)}
     resize: none;                   /* lock size */
 }
 
+/* Live companion stream preview */
+.live-transcript-window {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 52px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 18, 30, 0.85);
+  color: #d5e1ff;
+  font-size: 0.92rem;
+  line-height: 1.3;
+  margin-bottom: 0.8rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.live-transcript-window.is-active {
+  border-color: rgba(64, 196, 255, 0.7);
+  box-shadow: 0 0 18px rgba(64, 196, 255, 0.3);
+}
+.live-transcript-window .live-transcript-icon {
+  font-size: 1.05rem;
+}
+.live-transcript-window .live-transcript-text {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ANSWER AREA — MUCH BIGGER */
 #answerBox {
     height: calc(100% - 140px) !important;  /* occupies remaining space */
