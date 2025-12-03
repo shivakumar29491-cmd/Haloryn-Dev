@@ -14,6 +14,7 @@
 const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
+const crypto = require("crypto");
 
 // Try multiple .env locations so packaged builds still pick up secrets
 const envPaths = [];
@@ -36,7 +37,9 @@ const {
   globalShortcut,
   clipboard,
   Tray,
-  nativeImage
+  nativeImage,
+  screen,
+  desktopCapturer
 } = require("electron");
 require("./ipc/licenseIPC");
 
@@ -55,6 +58,73 @@ function safeChdir(dir) {
     console.warn(`Skipping chdir to ${dir}: ${err.message}`);
   }
 }
+
+const SCREEN_REGION_FILE = path.join(app.getPath("userData"), "screen-region.enc");
+const SCREEN_REGION_KEY = crypto
+  .createHash("sha256")
+  .update(process.env.SCREEN_REGION_SECRET || "haloryn-screen-read")
+  .digest();
+
+function encryptRegion(region) {
+  const json = JSON.stringify(region || {});
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", SCREEN_REGION_KEY, iv);
+  const payload = Buffer.concat([cipher.update(json, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, payload]).toString("base64");
+}
+
+function decryptRegion(blob) {
+  try {
+    const buf = Buffer.from(blob || "", "base64");
+    if (buf.length < 28) return null;
+    const iv = buf.slice(0, 12);
+    const tag = buf.slice(12, 28);
+    const data = buf.slice(28);
+    const decipher = crypto.createDecipheriv("aes-256-gcm", SCREEN_REGION_KEY, iv);
+    decipher.setAuthTag(tag);
+    const json = decipher.update(data, undefined, "utf8") + decipher.final("utf8");
+    return JSON.parse(json);
+  } catch (err) {
+    console.warn("[screenread] decrypt failed:", err.message);
+    return null;
+  }
+}
+
+function loadStoredRegion() {
+  try {
+    if (!fs.existsSync(SCREEN_REGION_FILE)) return null;
+    const raw = fs.readFileSync(SCREEN_REGION_FILE, "utf8");
+    return decryptRegion(raw);
+  } catch (err) {
+    console.warn("[screenread] load failed:", err.message);
+    return null;
+  }
+}
+
+function persistRegion(region) {
+  try {
+    if (!region) return false;
+    const dir = path.dirname(SCREEN_REGION_FILE);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(SCREEN_REGION_FILE, encryptRegion(region), "utf8");
+    return true;
+  } catch (err) {
+    console.warn("[screenread] save failed:", err.message);
+    return false;
+  }
+}
+
+ipcMain.handle("screenread:get-region", () => {
+  return { ok: true, region: loadStoredRegion() };
+});
+
+ipcMain.handle("screenread:save-region", (_e, region) => {
+  if (!region || typeof region.x !== "number") {
+    return { ok: false, error: "invalid region" };
+  }
+  return { ok: persistRegion(region) };
+});
 
 //safeChdir(__dirname);
 
@@ -1886,61 +1956,127 @@ ipcMain.handle('search:stats', async () => {
     return { ok: false, error: e.message };
   }
 });
-// screen read Handler
-ipcMain.handle("screenread:run", async () => {
+// Background screen capture (no snipping tool)
+ipcMain.handle("screenread:capture-below", async (_event, region) => {
   try {
-    const { dialog, BrowserWindow, desktopCapturer, clipboard } = require("electron");
+    const target = BrowserWindow.getFocusedWindow() || win;
+    if (!target || target.isDestroyed()) return { ok: false, error: "window unavailable" };
 
-    const win = BrowserWindow.getFocusedWindow();
-
-    // 1) Ask user which mode they want
-    const res = await dialog.showMessageBox(win, {
-      type: "question",
-      title: "Screen Read",
-      message: "Choose how to capture the screen:",
-      buttons: ["⛶ Full Screen", "✂ Snip Region", "Cancel"],
-      cancelId: 2,
-      defaultId: 1
+    const bounds = target.getBounds();
+    const display = screen.getDisplayNearestPoint({
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2
     });
 
-    if (res.response === 2) return { ok: false, cancel: true };
+    let captureRegion = null;
+    if (region && typeof region.x === "number" && region.width > 0) {
+      captureRegion = {
+        x: region.x,
+        y: region.y,
+        width: region.width,
+        height: region.height
+      };
+    } else {
+      const availableBelow =
+        display.bounds.y + display.bounds.height - (bounds.y + bounds.height);
+      const height = Math.max(200, Math.min(400, availableBelow > 0 ? availableBelow : 400));
+      const regionTop = Math.min(
+        display.bounds.y + display.bounds.height - height,
+        Math.max(display.bounds.y, bounds.y + bounds.height)
+      );
+      const regionHeight = Math.max(
+        1,
+        Math.min(height, display.bounds.y + display.bounds.height - regionTop)
+      );
+      const regionWidth = Math.max(1, Math.min(bounds.width, display.bounds.width));
+      const regionLeft = Math.max(
+        display.bounds.x,
+        Math.min(bounds.x, display.bounds.x + display.bounds.width - regionWidth)
+      );
 
-    // ------------------------
-    // OPTION A — FULL SCREEN
-    // ------------------------
-    if (res.response === 0) {
-      const sources = await desktopCapturer.getSources({
-        types: ["screen"],
-        thumbnailSize: { width: 1920, height: 1080 }
-      });
-
-      const full = sources[0]?.thumbnail?.toPNG();
-      if (!full) return { ok: false, error: "Full screenshot failed" };
-
-      return { ok: true, img: full };
-    }
-
-    // ------------------------
-    // OPTION B — SNIP REGION
-    // ------------------------
-    if (res.response === 1) {
-      exec("explorer.exe ms-screenclip:");
-
-      // Poll clipboard every 300ms for up to 20 tries
-      let tries = 0;
-      while (tries < 20) {
-        const img = clipboard.readImage();
-        if (!img.isEmpty()) {
-          return { ok: true, img: img.toPNG() };
-        }
-        await new Promise(res => setTimeout(res, 300));
-        tries++;
+      if (regionHeight <= 0 || regionWidth <= 0) {
+        return { ok: false, error: "capture region unavailable" };
       }
 
-      return { ok: false, error: "No image from snipping tool" };
+      captureRegion = {
+        x: regionLeft,
+        y: regionTop,
+        width: regionWidth,
+        height: regionHeight
+      };
     }
 
+    const thumbSize = {
+      width: Math.max(1, Math.floor(display.size.width * (display.scaleFactor || 1))),
+      height: Math.max(1, Math.floor(display.size.height * (display.scaleFactor || 1)))
+    };
+
+    console.log("[screenread] display", { id: display.id, bounds: display.bounds });
+
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: thumbSize
+    });
+
+    if (!sources.length) {
+      return { ok: false, error: "screen source missing" };
+    }
+
+    const parseDisplayId = (src) => {
+      if (!src) return null;
+      if (src.display_id) return Number(src.display_id);
+      const parts = (src.id || "").split(":");
+      return parts.length >= 2 ? Number(parts[1]) : null;
+    };
+
+    const matched = sources.find((src) => parseDisplayId(src) === display.id);
+    const source = matched || sources[0];
+    const nativeImage = source?.thumbnail;
+    if (!nativeImage) {
+      return { ok: false, error: "thumbnail missing" };
+    }
+
+    const imageSize = nativeImage.getSize();
+    const xScale = imageSize.width / Math.max(1, display.size.width);
+    const yScale = imageSize.height / Math.max(1, display.size.height);
+
+    const left = Math.max(
+      0,
+      Math.min(
+        imageSize.width - 1,
+        Math.round((captureRegion.x - display.bounds.x) * xScale)
+      )
+    );
+    const top = Math.max(
+      0,
+      Math.min(
+        imageSize.height - 1,
+        Math.round((captureRegion.y - display.bounds.y) * yScale)
+      )
+    );
+    const width = Math.max(
+      1,
+      Math.min(imageSize.width - left, Math.round(captureRegion.width * xScale))
+    );
+    const heightPx = Math.max(
+      1,
+      Math.min(imageSize.height - top, Math.round(captureRegion.height * yScale))
+    );
+
+    const png = nativeImage.toPNG();
+    const buffer = await sharp(png)
+      .extract({ left, top, width, height: heightPx })
+      .png()
+      .toBuffer();
+
+    console.log(
+      "[screenread] captured region",
+      { left, top, width, heightPx, sourceWidth: imageSize.width, sourceHeight: imageSize.height }
+    );
+
+    return { ok: true, buffer };
   } catch (err) {
+    console.error("[screenread:capture-below] error", err);
     return { ok: false, error: err.message };
   }
 });
