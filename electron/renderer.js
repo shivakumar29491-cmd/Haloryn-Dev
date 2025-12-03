@@ -174,6 +174,271 @@ const answerBox = document.querySelector('.answer-box');
 
 window.__useGroqFastMode = true;
 let __turns = [];
+let screenRegionCache = null;
+let overlayInjected = false;
+let overlayActive = false;
+
+function ensureRegionStyle() {
+  if (overlayInjected) return;
+  overlayInjected = true;
+  const style = document.createElement("style");
+  style.id = "screen-region-style";
+  style.textContent = `
+.screen-region-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 16, 0.5);
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.screen-region-selector {
+  position: absolute;
+  border: 2px dashed #40c4ff;
+  background: rgba(64, 196, 255, 0.15);
+  box-shadow: 0 0 12px rgba(64, 196, 255, 0.6);
+  cursor: move;
+}
+.screen-region-selector .handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 1px solid #40c4ff;
+  border-radius: 3px;
+}
+.screen-region-selector .handle[data-dir="nw"] { top: -7px; left: -7px; cursor: nwse-resize; }
+.screen-region-selector .handle[data-dir="ne"] { top: -7px; right: -7px; cursor: nesw-resize; }
+.screen-region-selector .handle[data-dir="sw"] { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.screen-region-selector .handle[data-dir="se"] { bottom: -7px; right: -7px; cursor: nwse-resize; }
+.screen-region-controls {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  display: flex;
+  gap: 8px;
+}
+.screen-region-controls button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  background: #111c2a;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+}
+.screen-region-hint {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 13px;
+  max-width: 260px;
+}
+`;
+  document.head.appendChild(style);
+}
+
+function clampSelection(sel, bounds) {
+  const clamped = { ...sel };
+  clamped.width = Math.max(40, Math.min(clamped.width, bounds.width));
+  clamped.height = Math.max(40, Math.min(clamped.height, bounds.height));
+  clamped.x = Math.max(0, Math.min(clamped.x, bounds.width - clamped.width));
+  clamped.y = Math.max(0, Math.min(clamped.y, bounds.height - clamped.height));
+  return clamped;
+}
+
+async function showRegionSelector() {
+  if (overlayActive) return null;
+  overlayActive = true;
+  ensureRegionStyle();
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "screen-region-overlay";
+    overlay.tabIndex = -1;
+
+    const selector = document.createElement("div");
+    selector.className = "screen-region-selector";
+    overlay.appendChild(selector);
+
+    const hint = document.createElement("div");
+    hint.className = "screen-region-hint";
+    hint.textContent = "Drag the box or draw a new area. Resize with the corners, then Confirm.";
+    overlay.appendChild(hint);
+
+    const controls = document.createElement("div");
+    controls.className = "screen-region-controls";
+    controls.innerHTML = `<button data-action="confirm">Confirm</button><button data-action="cancel">Cancel</button>`;
+    overlay.appendChild(controls);
+
+    const handles = ["nw", "ne", "sw", "se"].map((dir) => {
+      const handle = document.createElement("div");
+      handle.className = "handle";
+      handle.dataset.dir = dir;
+      selector.appendChild(handle);
+      return handle;
+    });
+
+    document.body.appendChild(overlay);
+
+    const bounds = overlay.getBoundingClientRect();
+    let selection = {
+      x: bounds.width / 2 - 150,
+      y: bounds.height / 2 - 100,
+      width: 300,
+      height: 200
+    };
+    let action = null;
+    let pointerId = null;
+    let startCoord = null;
+    let startSelection = null;
+
+    function updateSelection() {
+      const clamped = clampSelection(selection, bounds);
+      selection = clamped;
+      selector.style.left = `${selection.x}px`;
+      selector.style.top = `${selection.y}px`;
+      selector.style.width = `${selection.width}px`;
+      selector.style.height = `${selection.height}px`;
+    }
+
+    updateSelection();
+
+    function cleanup(result) {
+      overlay.remove();
+      overlayActive = false;
+      resolve(result);
+    }
+
+    function toRelative(e) {
+      return {
+        x: e.clientX - bounds.left,
+        y: e.clientY - bounds.top
+      };
+    }
+
+    function onPointerDown(e) {
+      if (e.pointerType !== "mouse") return;
+      const target = e.target;
+      pointerId = e.pointerId;
+      startCoord = toRelative(e);
+      startSelection = { ...selection };
+      if (target.dataset?.dir) {
+        action = { type: "resize", dir: target.dataset.dir };
+      } else if (target === selector) {
+        action = { type: "move" };
+      } else {
+        action = { type: "draw" };
+        selection = {
+          x: startCoord.x,
+          y: startCoord.y,
+          width: 0,
+          height: 0
+        };
+        updateSelection();
+      }
+      overlay.setPointerCapture(pointerId);
+    }
+
+    function onPointerMove(e) {
+      if (!action || e.pointerId !== pointerId) return;
+      const current = toRelative(e);
+      const dx = current.x - startCoord.x;
+      const dy = current.y - startCoord.y;
+      if (action.type === "draw") {
+        selection = {
+          x: Math.min(startCoord.x, current.x),
+          y: Math.min(startCoord.y, current.y),
+          width: Math.abs(dx),
+          height: Math.abs(dy)
+        };
+      } else if (action.type === "move") {
+        selection = {
+          ...selection,
+          x: startSelection.x + dx,
+          y: startSelection.y + dy
+        };
+      } else if (action.type === "resize") {
+        const sel = { ...selection };
+        switch (action.dir) {
+          case "nw":
+            sel.x = startSelection.x + dx;
+            sel.y = startSelection.y + dy;
+            sel.width = startSelection.width - dx;
+            sel.height = startSelection.height - dy;
+            break;
+          case "ne":
+            sel.y = startSelection.y + dy;
+            sel.width = startSelection.width + dx;
+            sel.height = startSelection.height - dy;
+            break;
+          case "sw":
+            sel.x = startSelection.x + dx;
+            sel.width = startSelection.width - dx;
+            sel.height = startSelection.height + dy;
+            break;
+          case "se":
+            sel.width = startSelection.width + dx;
+            sel.height = startSelection.height + dy;
+            break;
+        }
+        selection = sel;
+      }
+      updateSelection();
+    }
+
+    function onPointerUp(e) {
+      if (e.pointerId !== pointerId) return;
+      action = null;
+      pointerId = null;
+      overlay.releasePointerCapture(e.pointerId);
+    }
+
+    overlay.addEventListener("pointerdown", onPointerDown);
+    overlay.addEventListener("pointermove", onPointerMove);
+    overlay.addEventListener("pointerup", onPointerUp);
+    overlay.addEventListener("pointerleave", onPointerUp);
+
+    controls.addEventListener("click", (event) => {
+      const actionType = event.target.dataset.action;
+      if (actionType === "confirm") {
+        const region = {
+          x: Math.max(0, Math.min(selection.x, bounds.width - selection.width)),
+          y: Math.max(0, Math.min(selection.y, bounds.height - selection.height)),
+          width: selection.width,
+          height: selection.height
+        };
+        cleanup({
+          x: window.screenX + region.x,
+          y: window.screenY + region.y,
+          width: region.width,
+          height: region.height
+        });
+      } else if (actionType === "cancel") {
+        cleanup(null);
+      }
+    });
+  });
+}
+
+async function ensureScreenRegion() {
+  if (screenRegionCache) return screenRegionCache;
+  const stored = await window.electronAPI.getScreenReadRegion();
+  if (stored?.region) {
+    screenRegionCache = stored.region;
+    return screenRegionCache;
+  }
+  const selected = await showRegionSelector();
+  if (selected) {
+    await window.electronAPI.saveScreenReadRegion(selected);
+    screenRegionCache = selected;
+  }
+  return screenRegionCache;
+}
 
 function recordSummaryTurn(role, text) {
   if (!role) return;
@@ -1247,89 +1512,40 @@ function setTranscriptText(s) {
 
 //---------------------------------------------
 
-// SCREEN READ (Snipping Tool ΓåÆ Clipboard ΓåÆ OCR)
-
-//---------------------------------------------
-
+// SCREEN READ (Background capture)
+// ---------------------------------------------
 on(screenReadBtn, "click", async () => {
-
-  try {
-
-    // UI: Button ON + status
-
-    screenReadBtn.classList.add("active");
-
-    setState("screen: capturingΓÇª");
-
-
-
-    // 1) Minimize Haloryn immediately
-
-    window.windowCtl?.minimize();
-
-
-
-    // 2) Launch Snipping Tool (handled in main.js)
-
-    await window.electron.invoke("screenread:start");
-
-
-
-    // 3) Poll clipboard for image placed by Snipping Tool
-
-    let tries = 0;
-
-    let found = false;
-
-
-
-    while (tries < 20) {
-
-      const res = await window.electron.invoke("screenread:getClipboardImage");
-
-
-
-      if (res.ok && res.img) {
-
-        window.electron.send("ocr:image", res.img);
-
-        found = true;
-
-        break;
-
-      }
-
-      await new Promise(r => setTimeout(r, 300));
-
-      tries++;
-
-    }
-
-
-
-    if (!found) appendLog("[screen] no screenshot detected");
-
-
-
-  } catch (err) {
-
-    appendLog(`[screen] unexpected error: ${err.message}`);
-
-  } finally {
-
-    // Restore window right away after OCR (added later in OCR handler)
-
+  if (!screenReadBtn) return;
+  screenReadBtn.disabled = true;
+  screenReadBtn.classList.add("active");
+  setState("screen: capturing...");
+  console.log("[screen] capture requested");
+  const region = await ensureScreenRegion();
+  if (!region) {
+    appendLog("[screen] region not configured");
+    screenReadBtn.disabled = false;
     screenReadBtn.classList.remove("active");
-
     setState("idle");
-
+    return;
   }
-
+  window.windowCtl?.minimize();
+  try {
+    const res = await window.electronAPI.captureScreenBelow(region);
+    console.log("[screen] capture response", res);
+    if (!res?.ok || !res.buffer) {
+      appendLog("[screen] capture failed: " + (res?.error || "no data"));
+      return;
+    }
+    window.electron.send("ocr:image", res.buffer);
+  } catch (err) {
+    appendLog("[screen] capture error: " + (err?.message || err));
+  } finally {
+    screenReadBtn.disabled = false;
+    screenReadBtn.classList.remove("active");
+    window.windowCtl?.restore();
+    setState("idle");
+  }
 });
-
-
-
-
 
 // --- Incognito (hide taskbar/tray + block screen capture; keep app visible) ---
 
@@ -1520,15 +1736,13 @@ window.electron.on("ocr:text", async (event, textRaw) => {
   try {
     const text = (textRaw || "").trim();
 
-    // 1) If OCR empty → stop here
     if (!text || text.length < 2) {
-      appendLog("[screen] OCR returned empty → no AI call");
-      window.windowCtl?.restore();
-      setState("idle");
+      appendLog("[screen] OCR returned empty - no AI call");
+      console.log("[screen] ocr empty textRaw", textRaw);
       return;
     }
 
-    // 2) Put OCR text into transcript area
+    console.log("[screen] OCR text", text);
     if (liveTranscript) {
       const existing = (liveTranscript.value || "").trim();
       const prefix = "[SCREEN OCR]\n";
@@ -1538,20 +1752,23 @@ window.electron.on("ocr:text", async (event, textRaw) => {
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
-    // 3) Ask AI normally (screen channel)
-    const res = await window.enqueueChannelRequest("screen", () =>
-      window.electronAPI.ask(text)
-    );
-    appendAnswerBlock(res?.answer || res?.text || res || "");
+    if (chatInput) {
+      chatInput.value = text;
+      chatInput.focus();
+    }
 
   } catch (err) {
-    appendLog(`[screen] OCR handler error: ${err.message}`);
+    appendLog("[screen] OCR handler error: " + err.message);
   } finally {
-    // 5) Always restore window
     window.windowCtl?.restore();
     setState("idle");
   }
 });
+
+
+
+
+
 
 
 

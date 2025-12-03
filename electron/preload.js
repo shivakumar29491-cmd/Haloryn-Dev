@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
    getSummary: () => ipcRenderer.invoke("get-summary"),
    finishSession: (payload) => ipcRenderer.send("finish-session", payload),
    exitApp: () => ipcRenderer.send("exit-app"),
+   captureScreenBelow: (region) => ipcRenderer.invoke("screenread:capture-below", region),
+   getScreenReadRegion: () => ipcRenderer.invoke("screenread:get-region"),
+   saveScreenReadRegion: (region) => ipcRenderer.invoke("screenread:save-region", region),
    onTriggerFinishSession: (cb) => {
        if (typeof cb !== "function") return () => {};
        const listener = (_event, ...args) => cb(...args);
