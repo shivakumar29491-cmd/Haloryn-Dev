@@ -56,10 +56,14 @@ const btnRow=document.getElementById("btnRow");
 // Load account data
 (async()=>{try{
   const s=await window.electronAPI?.getUserSession?.();
+  if (!s?.verified) {
+    window.location.href="login.html";
+    return;
+  }
   document.getElementById("accName").value=s?.displayName||"";
   document.getElementById("accEmail").value=s?.email||"";
   document.getElementById("accPhone").value=s?.phone||"";
-}catch(e){console.error(e);}})();
+}catch(e){console.error(e);window.location.href="login.html";}})();
 
 // Edit mode
 editBtn.onclick=()=>{

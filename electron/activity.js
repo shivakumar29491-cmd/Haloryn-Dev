@@ -7,7 +7,6 @@ const activityUserChip = document.getElementById("activityUserChip");
 const activityUserMenu = document.getElementById("activityUserMenu");
 const activityAccount = document.getElementById("activityAccount");
 const activitySignout = document.getElementById("activitySignout");
-const activityLogin = document.getElementById("activityLogin");
 
 function startSession() {
   const wrapper = document.getElementById("activityWrapper");
@@ -180,10 +179,17 @@ window.addEventListener("DOMContentLoaded", async () => {
     const session = await window.electronAPI?.getUserSession?.();
     const name = session?.displayName || session?.email || "User";
     const meta = session?.email || session?.phone || session?.provider || "";
+    const verified = !!session?.verified;
     if (heroUserName) heroUserName.textContent = name;
     if (heroUserMeta) heroUserMeta.textContent = meta;
     if (welcomeLine) welcomeLine.textContent = `Welcome back, ${name}`;
-    if (activityAccount) activityAccount.textContent = `Account (${name})`;
+    if (activityAccount) {
+      activityAccount.textContent = `Account (${name})`;
+      activityAccount.style.display = verified ? "" : "none";
+    }
+    if (activitySignout) {
+      activitySignout.style.display = verified ? "" : "none";
+    }
   } catch {}
 });
 
@@ -198,9 +204,21 @@ if (activityUserChip) {
   activityUserChip.addEventListener("click", () => toggleActivityMenu(true));
 }
 
+async function ensureSignOut() {
+  try {
+    const module = await import("./auth/authManager.js");
+    if (module?.signOutUser) {
+      await module.signOutUser();
+    }
+  } catch (err) {
+    console.warn("signOut import failed:", err);
+  }
+}
+
 if (activitySignout) {
   activitySignout.addEventListener("click", async () => {
     toggleActivityMenu(false);
+    await ensureSignOut();
     try { await window.electron?.invoke?.("logout"); } catch {}
   });
 }
@@ -209,13 +227,6 @@ if (activityAccount) {
   activityAccount.addEventListener("click", async () => {
     toggleActivityMenu(false);
     try { await window.electron?.invoke?.("load-user-info"); } catch {}
-  });
-}
-
-if (activityLogin) {
-  activityLogin.addEventListener("click", async () => {
-    toggleActivityMenu(false);
-    try { await window.electron?.invoke?.("logout:clear"); } catch {}
   });
 }
 
