@@ -7,6 +7,7 @@ const activityUserChip = document.getElementById("activityUserChip");
 const activityUserMenu = document.getElementById("activityUserMenu");
 const activityAccount = document.getElementById("activityAccount");
 const activitySignout = document.getElementById("activitySignout");
+const activityLogin = document.getElementById("activityLogin");
 
 function startSession() {
   const wrapper = document.getElementById("activityWrapper");
@@ -208,6 +209,13 @@ if (activityAccount) {
   activityAccount.addEventListener("click", async () => {
     toggleActivityMenu(false);
     try { await window.electron?.invoke?.("load-user-info"); } catch {}
+  });
+}
+
+if (activityLogin) {
+  activityLogin.addEventListener("click", async () => {
+    toggleActivityMenu(false);
+    try { await window.electron?.invoke?.("logout:clear"); } catch {}
   });
 }
 

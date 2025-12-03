@@ -17,7 +17,6 @@ jest.mock("http", () => ({
 
 describe("main IPC handlers", () => {
   test("save/get user session and load-activity IPCs work", async () => {
-    const onHandlers = {};
     const handleHandlers = {};
 
     jest.resetModules();
@@ -58,7 +57,6 @@ describe("main IPC handlers", () => {
             app,
             BrowserWindow,
             ipcMain: {
-              on: jest.fn((ch, fn) => (onHandlers[ch] = fn)),
               handle: jest.fn((ch, fn) => (handleHandlers[ch] = fn))
             },
             dialog: {},
@@ -75,7 +73,7 @@ describe("main IPC handlers", () => {
     });
 
     // save session
-    onHandlers["save-user-session"](null, { email: "a@b.com" });
+    await handleHandlers["save-user-session"](null, { email: "a@b.com" });
     const sessionData = await handleHandlers["get-user-session"]();
     expect(sessionData).toEqual({ email: "a@b.com" });
 

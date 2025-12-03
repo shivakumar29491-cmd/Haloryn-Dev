@@ -16,7 +16,7 @@ verifyOtpBtn.onclick = async () => {
   const result = await verifyOtpFlow(type, payload);
 
   if (result) {
-    window.electronAPI.saveUserSession({
+    await window.electronAPI.saveUserSession({
       email: email,
       phone: phone,
       verified: true
