@@ -12,7 +12,8 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  signOut
 } from "./firebase.js";
 import { doc, setDoc } from "firebase/firestore";
 import { sendPhoneOTP } from "./phoneOtp.js";
@@ -45,6 +46,7 @@ export async function loginManual(email, password, sendTo, phone) {
 
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
   const cred = await signInWithPopup(auth, provider);
   return cred.user;
 }
@@ -61,6 +63,7 @@ export async function resolveRedirectLogin() {
 
 export async function loginFacebook() {
   const provider = new FacebookAuthProvider();
+  provider.setCustomParameters({ auth_type: "reauthenticate" });
   const cred = await signInWithPopup(auth, provider);
   return cred.user;
 }
@@ -75,4 +78,8 @@ export async function verifyOtpFlow(type, payload) {
     return verifyEmailOTP(payload.email, payload.code);
   }
   return payload.confirmResult.confirm(payload.code);
+}
+
+export async function signOutUser() {
+  return signOut(auth);
 }
