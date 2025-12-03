@@ -37,10 +37,21 @@ jobs:
 
   build-mac:
     name: Build macOS .dmg
-    # Use Intel runner to avoid arm64 exec format errors with 7zip/electron-builder
-    runs-on: macos-13
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x64
+            artifact: HaloAI-macOS-x64
+          - runner: macos-14
+            arch: arm64
+            artifact: HaloAI-macOS-arm64
+    runs-on: ${{ matrix.runner }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      npm_config_arch: ${{ matrix.arch }}
+      npm_config_target_arch: ${{ matrix.arch }}
 
     steps:
       - name: Checkout
@@ -51,17 +62,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (build native modules for target arch)
+        run: npm ci --include=optional
 
-      - name: Ensure electron-builder is executable
-        run: chmod +x ./node_modules/.bin/electron-builder
-
-      - name: Build macOS Installer
-        run: npm run build:mac
+      - name: Build macOS Installer (${{ matrix.arch }})
+        run: npx electron-builder --mac dmg --${{ matrix.arch }}
 
       - name: Upload macOS Installer
         uses: actions/upload-artifact@v4
         with:
-          name: HaloAI-macOS
+          name: ${{ matrix.artifact }}
           path: dist/*.dmg
