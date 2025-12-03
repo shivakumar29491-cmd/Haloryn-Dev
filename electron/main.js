@@ -126,6 +126,102 @@ ipcMain.handle("screenread:save-region", (_e, region) => {
   return { ok: persistRegion(region) };
 });
 
+ipcMain.handle("screenread:launch-app", (_e, command) => {
+  if (!command) return { ok: false, error: "missing command" };
+  try {
+    const child = exec(command, { windowsHide: true });
+    child.unref?.();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+let screenOverlayWindow = null;
+let screenOverlayPending = null;
+
+function finalizeScreenOverlay(result) {
+  if (!screenOverlayPending) return;
+  const resolver = screenOverlayPending.resolve;
+  screenOverlayPending = null;
+  if (resolver) resolver(result);
+}
+
+ipcMain.on("screenread:selection", (_event, region) => {
+  console.log("[screenread] selection received", region);
+  finalizeScreenOverlay({ ok: true, region });
+});
+
+ipcMain.on("screenread:selection-cancel", () => {
+  console.log("[screenread] selection canceled");
+  finalizeScreenOverlay({ ok: false, error: "canceled" });
+});
+
+ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
+  if (screenOverlayPending) {
+    return { ok: false, error: "overlay busy" };
+  }
+
+  const target = BrowserWindow.getFocusedWindow() || win;
+  const anchorBounds = target && !target.isDestroyed() ? target.getBounds() : { x: 0, y: 0 };
+  const display =
+    screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y }) || screen.getPrimaryDisplay();
+
+  console.log("[screenread] overlay request", { displayId: display?.id, initialRegion });
+
+  screenOverlayWindow = new BrowserWindow({
+    x: display.bounds.x,
+    y: display.bounds.y,
+    width: display.bounds.width,
+    height: display.bounds.height,
+    frame: false,
+    transparent: true,
+    movable: false,
+    resizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    focusable: true,
+    hasShadow: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      backgroundThrottling: false
+    }
+  });
+
+  screenOverlayWindow.setMenuBarVisibility(false);
+  screenOverlayWindow.setAlwaysOnTop(true, "screen-saver");
+
+  screenOverlayPending = {
+    resolve: null
+  };
+
+  const promise = new Promise((resolve) => {
+    screenOverlayPending.resolve = resolve;
+  });
+
+  screenOverlayWindow.on("closed", () => {
+    screenOverlayWindow = null;
+    if (screenOverlayPending) {
+      const closeResolver = screenOverlayPending.resolve;
+      screenOverlayPending = null;
+      if (closeResolver) closeResolver({ ok: false, error: "overlay closed" });
+    }
+  });
+
+  await screenOverlayWindow.loadFile(path.join(__dirname, "snipOverlay.html"));
+
+  screenOverlayWindow.once("ready-to-show", () => {
+    if (screenOverlayWindow) {
+      screenOverlayWindow.show();
+      screenOverlayWindow.focus();
+    }
+  });
+
+  return promise;
+});
+
 //safeChdir(__dirname);
 
 const { spawn, exec } = require("child_process");
@@ -135,7 +231,6 @@ const cheerio = require("cheerio");
 const { URL } = require("url");
 let pdfParse = null;
 const sharp = require("sharp");
-const { desktopCapturer } = require("electron");
 const http = require("http");
 const IS_DEV = !app.isPackaged;
 
@@ -1697,12 +1792,6 @@ const { createWorker } = require("tesseract.js");
 
 ipcMain.on("ocr:image", async (event, imgBuffer) => {
   try {
-    // Save to temp
-    const tmpDir = path.join(os.tmpdir(), "haloai-screen");
-    fs.mkdirSync(tmpDir, { recursive: true });
-    const file = path.join(tmpDir, `ocr_${Date.now()}.png`);
-    fs.writeFileSync(file, imgBuffer);
-
     // Tesseract v6 worker
     const worker = await createWorker("eng", {
       workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
@@ -1710,7 +1799,7 @@ ipcMain.on("ocr:image", async (event, imgBuffer) => {
       langPath: path.join(__dirname, "tessdata"),
     });
 
-    const result = await worker.recognize(file);
+    const result = await worker.recognize(imgBuffer);
     await worker.terminate();
 
     send("ocr:text", result.data.text || "");

@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
    captureScreenBelow: (region) => ipcRenderer.invoke("screenread:capture-below", region),
    getScreenReadRegion: () => ipcRenderer.invoke("screenread:get-region"),
    saveScreenReadRegion: (region) => ipcRenderer.invoke("screenread:save-region", region),
+   launchApp: (cmd) => ipcRenderer.invoke("screenread:launch-app", cmd),
+   openScreenOverlay: (region) => ipcRenderer.invoke("screenread:open-overlay", region),
    onTriggerFinishSession: (cb) => {
        if (typeof cb !== "function") return () => {};
        const listener = (_event, ...args) => cb(...args);
@@ -81,6 +83,11 @@ contextBridge.exposeInMainWorld("licenseAPI", {
     trialStatus: () => ipcRenderer.invoke("license:trialStatus")
 });
 contextBridge.exposeInMainWorld("isPackaged", global.IS_PACKAGED);
+
+contextBridge.exposeInMainWorld('overlayAPI', {
+  confirm: (region) => ipcRenderer.send('screenread:overlay-confirm', region),
+  cancel: () => ipcRenderer.send('screenread:overlay-cancel')
+});
 
 contextBridge.exposeInMainWorld("nav", {
     loadLocalFile: (file) => ipcRenderer.invoke("nav:loadLocalFile", file)

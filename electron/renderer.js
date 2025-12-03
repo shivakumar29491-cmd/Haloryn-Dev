@@ -239,8 +239,33 @@ function ensureRegionStyle() {
   font-size: 13px;
   max-width: 260px;
 }
+.screen-region-controls-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 100000;
+}
+.screen-region-controls-panel button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 4px;
+  background: #0d1b33;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.screenread-clean #liveLog {
+  display: none !important;
+}
 `;
   document.head.appendChild(style);
+}
+
+function setCaptureClean(enable) {
+  document.documentElement.classList.toggle("screenread-clean", !!enable);
 }
 
 function clampSelection(sel, bounds) {
@@ -252,7 +277,7 @@ function clampSelection(sel, bounds) {
   return clamped;
 }
 
-async function showRegionSelector() {
+async function showRegionSelector(initialRegion = null) {
   if (overlayActive) return null;
   overlayActive = true;
   ensureRegionStyle();
@@ -271,9 +296,9 @@ async function showRegionSelector() {
     overlay.appendChild(hint);
 
     const controls = document.createElement("div");
-    controls.className = "screen-region-controls";
+    controls.className = "screen-region-controls-panel";
     controls.innerHTML = `<button data-action="confirm">Confirm</button><button data-action="cancel">Cancel</button>`;
-    overlay.appendChild(controls);
+    document.body.appendChild(controls);
 
     const handles = ["nw", "ne", "sw", "se"].map((dir) => {
       const handle = document.createElement("div");
@@ -292,6 +317,16 @@ async function showRegionSelector() {
       width: 300,
       height: 200
     };
+    if (initialRegion && typeof initialRegion.x === "number") {
+      const relX = initialRegion.x - window.screenX;
+      const relY = initialRegion.y - window.screenY;
+      selection = {
+        x: relX,
+        y: relY,
+        width: initialRegion.width,
+        height: initialRegion.height
+      };
+    }
     let action = null;
     let pointerId = null;
     let startCoord = null;
@@ -311,6 +346,7 @@ async function showRegionSelector() {
     function cleanup(result) {
       overlay.remove();
       overlayActive = false;
+      controls.remove();
       resolve(result);
     }
 
@@ -403,8 +439,20 @@ async function showRegionSelector() {
     overlay.addEventListener("pointerup", onPointerUp);
     overlay.addEventListener("pointerleave", onPointerUp);
 
+    function releasePointer() {
+      if (pointerId) {
+        overlay.releasePointerCapture(pointerId);
+        pointerId = null;
+        action = null;
+      }
+    }
+
     controls.addEventListener("click", (event) => {
-      const actionType = event.target.dataset.action;
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const actionType = button.dataset.action;
+      console.log("[screen] selector action", actionType);
+      releasePointer();
       if (actionType === "confirm") {
         const region = {
           x: Math.max(0, Math.min(selection.x, bounds.width - selection.width)),
@@ -412,32 +460,89 @@ async function showRegionSelector() {
           width: selection.width,
           height: selection.height
         };
-        cleanup({
+        const savedRegion = clampToWindow({
           x: window.screenX + region.x,
           y: window.screenY + region.y,
           width: region.width,
           height: region.height
         });
+        console.log("[screen] selector confirmed region", savedRegion);
+        cleanup(savedRegion);
       } else if (actionType === "cancel") {
+        console.log("[screen] selection canceled by user");
         cleanup(null);
       }
     });
   });
 }
 
-async function ensureScreenRegion() {
-  if (screenRegionCache) return screenRegionCache;
-  const stored = await window.electronAPI.getScreenReadRegion();
-  if (stored?.region) {
-    screenRegionCache = stored.region;
-    return screenRegionCache;
+function clampToWindow(region) {
+  if (!region) return region;
+  const appBounds = {
+    x: window.screenX,
+    y: window.screenY,
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+  const result = { ...region };
+  result.x = Math.max(appBounds.x, Math.min(region.x, appBounds.x + appBounds.width - region.width));
+  result.y = Math.max(appBounds.y, Math.min(region.y, appBounds.y + appBounds.height - region.height));
+  result.width = Math.max(10, Math.min(region.width, appBounds.width - (result.x - appBounds.x)));
+  result.height = Math.max(10, Math.min(region.height, appBounds.height - (result.y - appBounds.y)));
+  return result;
+}
+
+async function persistScreenRegion(region) {
+  if (!region || typeof region.x !== "number" || region.width <= 0 || region.height <= 0) {
+    return null;
   }
-  const selected = await showRegionSelector();
-  if (selected) {
-    await window.electronAPI.saveScreenReadRegion(selected);
-    screenRegionCache = selected;
+  try {
+    const result = await window.electronAPI.saveScreenReadRegion(region);
+    console.log("[screen] save region result", result);
+  } catch (err) {
+    console.error("[screen] save region error", err);
   }
+  screenRegionCache = region;
   return screenRegionCache;
+}
+
+async function inlineScreenRegion(initialRegion = null) {
+  const selected = await showRegionSelector(initialRegion);
+  if (!selected) return null;
+  await persistScreenRegion(selected);
+  return selected;
+}
+
+async function selectScreenRegion() {
+  let storedRegion = null;
+  try {
+    const stored = await window.electronAPI.getScreenReadRegion();
+    storedRegion = stored?.region || null;
+    console.log("[screen] stored region response", stored);
+  } catch (err) {
+    console.error("[screen] read region error", err);
+  }
+
+  const initialRegion = screenRegionCache || storedRegion || null;
+  if (initialRegion && !screenRegionCache) {
+    screenRegionCache = initialRegion;
+  }
+
+  if (window.electronAPI?.openScreenOverlay) {
+    try {
+      const overlayRes = await window.electronAPI.openScreenOverlay(initialRegion);
+      console.log("[screen] overlay helper response", overlayRes);
+      if (overlayRes?.ok && overlayRes.region?.width > 4 && overlayRes.region?.height > 4) {
+        return await persistScreenRegion(overlayRes.region);
+      }
+    } catch (err) {
+      console.error("[screen] overlay helper error", err);
+    }
+  }
+
+  const inlineSelection = await inlineScreenRegion(initialRegion);
+  if (inlineSelection) return inlineSelection;
+  return storedRegion || screenRegionCache || null;
 }
 
 function recordSummaryTurn(role, text) {
@@ -451,6 +556,23 @@ function recordSummaryTurn(role, text) {
 }
 
 window.__recordSummaryTurn = recordSummaryTurn;
+
+function normalizeCapturedText(text) {
+  if (!text) return "";
+  const lines = String(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const filtered = [];
+  for (const line of lines) {
+    if (/^\[?screen/i.test(line)) continue;
+    if (/^ln\s*\d+/i.test(line)) continue;
+    if (/^col\s*\d+/i.test(line)) continue;
+    if (/^{/.test(line)) continue;
+    filtered.push(line);
+  }
+  return filtered.join("\n");
+}
 // collapse transcript/answer until user interacts
 
 if (transcriptContainer) transcriptContainer.classList.add('panel-collapsed');
@@ -1520,7 +1642,9 @@ on(screenReadBtn, "click", async () => {
   screenReadBtn.classList.add("active");
   setState("screen: capturing...");
   console.log("[screen] capture requested");
-  const region = await ensureScreenRegion();
+  window.windowCtl?.minimize();
+  const region = await selectScreenRegion();
+  window.windowCtl?.restore();
   if (!region) {
     appendLog("[screen] region not configured");
     screenReadBtn.disabled = false;
@@ -1530,6 +1654,7 @@ on(screenReadBtn, "click", async () => {
   }
   window.windowCtl?.minimize();
   try {
+    setCaptureClean(true);
     const res = await window.electronAPI.captureScreenBelow(region);
     console.log("[screen] capture response", res);
     if (!res?.ok || !res.buffer) {
@@ -1540,6 +1665,7 @@ on(screenReadBtn, "click", async () => {
   } catch (err) {
     appendLog("[screen] capture error: " + (err?.message || err));
   } finally {
+    setCaptureClean(false);
     screenReadBtn.disabled = false;
     screenReadBtn.classList.remove("active");
     window.windowCtl?.restore();
@@ -1742,18 +1868,20 @@ window.electron.on("ocr:text", async (event, textRaw) => {
       return;
     }
 
-    console.log("[screen] OCR text", text);
+    const normalized = normalizeCapturedText(text);
+    console.log("[screen] normalized OCR text", normalized);
+    if (!normalized) {
+      console.log("[screen] normalized text empty, skipping transcript");
+      return;
+    }
     if (liveTranscript) {
       const existing = (liveTranscript.value || "").trim();
-      const prefix = "[SCREEN OCR]\n";
-
-      liveTranscript.value =
-        (existing ? existing + "\n\n" : "") + prefix + text;
+      liveTranscript.value = (existing ? existing + "\n\n" : "") + normalized;
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
     if (chatInput) {
-      chatInput.value = text;
+      chatInput.value = normalized;
       chatInput.focus();
     }
 
