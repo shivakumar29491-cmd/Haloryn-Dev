@@ -302,6 +302,8 @@ button:hover{filter:brightness(1.1)}
   gap: 6px;
   flex:1;
   min-height:0;   /* allow the answer container to scroll instead of expanding */
+  position: relative;
+  padding-bottom: 24px;
 }
 .answer-log {
   width: 100%;
@@ -328,6 +330,37 @@ button:hover{filter:brightness(1.1)}
   flex: 1;
   min-height: 0;
   max-height: none; /* let flex control height within viewport */
+  padding-bottom: 64px;
+  max-height: calc(100vh - 280px);
+}
+.answer-footer-fixed {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(130,170,255,.25);
+  background: rgba(11,18,32,.88);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.35);
+  z-index: 12;
+}
+
+.answer-footer-fixed.hidden {
+  display: none;
+}
+
+.answer-footer-fixed .answer-footer-btn {
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  min-width: 120px;
 }
 .answer-content {
   display: flex;
@@ -418,6 +451,7 @@ button:hover{filter:brightness(1.1)}
 /* Companion toggle: slow flicker when ON */
 .toggle.pulsing {
   position: relative;
+  padding-bottom: 24px;
   animation: toggleGlow 1.8s ease-in-out infinite;
 }
 @keyframes toggleGlow {

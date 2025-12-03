@@ -67,9 +67,72 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+let answerFooter;
+let followUpBtn;
+let detailSummaryBtn;
+let footerVisible = false;
+let lastAnswerText = "";
+
+const DERIVED_PROMPTS = {
+  follow: "Give 2 follow-up questions for: ",
+  detail: "Give a detailed explanation for: "
+};
+
+function setupAnswerFooterControls() {
+  answerFooter = document.getElementById("answerFooterFixed");
+  followUpBtn = document.getElementById("followUpBtn");
+  detailSummaryBtn = document.getElementById("detailSummaryBtn");
+  if (followUpBtn) on(followUpBtn, "click", () => requestDerivedAnswer("follow"));
+  if (detailSummaryBtn) on(detailSummaryBtn, "click", () => requestDerivedAnswer("detail"));
+  monitorAnswerContainer();
+}
+
+function showAnswerFooter() {
+  if (footerVisible) return;
+  if (!answerFooter) answerFooter = document.getElementById("answerFooterFixed");
+  if (!answerFooter) return;
+  answerFooter.classList.remove("hidden");
+  footerVisible = true;
+}
+
+function monitorAnswerContainer() {
+  const container = document.getElementById("liveAnswer");
+  if (!container) return;
+  const refresh = () => {
+    const lastChild = container.lastElementChild;
+    if (lastChild) {
+      lastAnswerText = String(lastChild.textContent || "").trim() || lastAnswerText;
+      showAnswerFooter();
+    }
+  };
+  refresh();
+  const observer = new MutationObserver(() => {
+    if (container.childElementCount > 0) refresh();
+  });
+  observer.observe(container, { childList: true, subtree: false });
+}
+
+async function requestDerivedAnswer(type) {
+  const prefix = DERIVED_PROMPTS[type];
+  if (!prefix || !lastAnswerText) return;
+  try {
+    setState("answering");
+    const response = await window.enqueueChannelRequest("chat", () =>
+      window.electronAPI.ask(`${prefix}${lastAnswerText}`)
+    );
+    const final = response?.answer || response?.text || response || "";
+    appendAnswerBlock(final);
+  } catch (err) {
+    appendAnswerBlock("Error: " + (err?.message || err));
+  } finally {
+    setState("idle");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
 
   debugLog("DOM fully loaded");
+  setupAnswerFooterControls();
 
 });
 
@@ -770,42 +833,6 @@ function maybeAutoScroll(container) {
 
 }
 
-function renderActionButtons(text) {
-  const wrap = document.createElement("div");
-  wrap.className = "answer-actions";
-
-  const mk = (label, handler) => {
-    const btn = document.createElement("button");
-    btn.className = "answer-action-btn";
-    btn.textContent = label;
-    btn.onclick = handler;
-    return btn;
-  };
-
-  wrap.appendChild(
-    mk("Follow up questions", async () => {
-      const q = `Give 2 follow-up questions for: ${text}`;
-    const res = await window.enqueueChannelRequest('chat', () =>
-      window.electronAPI.ask(q)
-    );
-      appendAnswerBlock(res.answer || res);
-    })
-  );
-
-  wrap.appendChild(
-    mk("Detailed explanation", async () => {
-      const q = `Give a detailed explanation for: ${text}`;
-    const res = await window.enqueueChannelRequest('chat', () =>
-      window.electronAPI.ask(q)
-    );
-      appendAnswerBlock(res.answer || res);
-    })
-  );
-
-  return wrap;
-}
-
-
 // ---- Virtualized Chat Renderer ----
 
 const VIRTUAL_WINDOW = 3; // render 1 above, 1 current, 1 below
@@ -840,7 +867,6 @@ function renderAnswersVirtualized() {
     div.style.whiteSpace = "pre-wrap";
 
     wrap.appendChild(div);
-    wrap.appendChild(renderActionButtons(ans.text));
 
     // Fill vertical space as if all answers existed
     wrap.style.paddingTop = i === start ? (start * avgHeight) + "px" : "0px";
@@ -938,6 +964,9 @@ function finalizeStreamingAnswer(finalText) {
     if (!finalNorm) {
       finalNorm = 'No answer (stream returned empty).';
     }
+
+    lastAnswerText = finalNorm;
+    showAnswerFooter();
 
     // Update internal ALL_ANSWERS list
     if (ALL_ANSWERS.length) {
@@ -2719,6 +2748,9 @@ function appendAnswerBlock(text) {
 
   const normalized = normalizeAnswer(text);
   if (!normalized) return;
+
+  lastAnswerText = normalized;
+  showAnswerFooter();
 
   // Add new answer to virtual list
   ALL_ANSWERS.push({ text: normalized });
