@@ -2,15 +2,38 @@ name: Build Haloryn Installers
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, macos-15]
+        include:
+          - name: windows-x64
+            os: windows-latest
+            arch: x64
+            artifact: Haloryn-Windows
+            artifact_glob: dist/*.exe
+            build_cmd: npm run dist
+          - name: macos-x64
+            os: macos-13
+            arch: x64
+            artifact: Haloryn-macOS-x64
+            artifact_glob: dist/*.dmg
+            build_cmd: npx electron-builder --mac dmg --x64
+          - name: macos-arm64
+            os: macos-14
+            arch: arm64
+            artifact: Haloryn-macOS-arm64
+            artifact_glob: dist/*.dmg
+            build_cmd: npx electron-builder --mac dmg --arm64
 
     runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      npm_config_arch: ${{ matrix.arch }}
+      npm_config_target_arch: ${{ matrix.arch }}
 
     steps:
       - name: Checkout
@@ -23,41 +46,36 @@ jobs:
           cache: npm
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci --include=optional
 
       - name: Clean Dist Folder
         shell: bash
         run: rm -rf dist || true
 
-      - name: Build Installers
-        
-        run: npm run dist
+      - name: Build Installers (${{ matrix.name }})
+        run: ${{ matrix.build_cmd }}
 
-      # ---- WINDOWS ARTIFACT ----
-      - name: Upload Windows Installer (Haloryn)
-        if: matrix.os == 'windows-latest'
+      - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Haloryn-Windows
-          path: dist/*.exe
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact_glob }}
           if-no-files-found: error
 
-      # ---- MAC ARTIFACT ----
-      - name: Upload macOS Installer (Haloryn)
-        if: startsWith(matrix.os, 'macos')
-        uses: actions/upload-artifact@v4
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: Haloryn-macOS
-          path: dist/*.dmg
-          if-no-files-found: error
+          path: release
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          files: |
-            dist/*.exe
-            dist/*.dmg
+          files: release/**/*.{exe,dmg}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-

@@ -44,6 +44,10 @@
         <!-- Transcript box (single source of truth) -->
         <div id="transcript-container" class="glass">
           <label>Transcript</label>
+          <div id="liveTranscriptStream" class="live-transcript-window" aria-live="polite" aria-atomic="true">
+            <span class="live-transcript-icon" aria-hidden="true">🎙</span>
+            <span class="live-transcript-text" id="liveTranscriptStreamText">Listening…</span>
+          </div>
           <textarea id="liveTranscript" spellcheck="false" readonly></textarea>
           <textarea id="transcript" style="display:none;"></textarea>
         </div>
