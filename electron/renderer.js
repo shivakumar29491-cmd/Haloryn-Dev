@@ -1747,11 +1747,22 @@ on(screenReadBtn, "click", async () => {
     setCaptureClean(true);
     const res = await window.electronAPI.captureScreenBelow(region);
     console.log("[screen] capture response", res);
-    if (!res?.ok || !res.buffer) {
+    if (res?.base64) {
+      console.log("[screen] base64 length", res.base64.length);
+    }
+    if (!res?.ok) {
       appendLog("[screen] capture failed: " + (res?.error || "no data"));
       return;
     }
-    window.electron.send("ocr:image", res.buffer);
+    if (!res?.base64 || typeof res.base64 !== "string" || res.base64.length < 10) {
+      appendLog("[screen] invalid or empty capture — skipping OCR");
+      console.log("[screen] invalid capture payload:", res);
+      return;
+    }
+
+    console.log("[screen] sending capture to OCR");
+    window.electron.send("ocr:image", { base64: res.base64 });
+
   } catch (err) {
     appendLog("[screen] capture error: " + (err?.message || err));
   } finally {
@@ -1948,10 +1959,16 @@ document.addEventListener("click", (e) => {
 //--------------------------------------------------
 
 // ---------------- OCR → Transcript + AI ----------------
-window.electron.on("ocr:text", async (event, textRaw) => {
+window.electron.on("ocr:text", async (_event, textRaw) => {
   try {
-    const text = (textRaw || "").trim();
+    // Ensure valid text
+    if (!textRaw || typeof textRaw !== "string") {
+      appendLog("[screen] invalid or null OCR textRaw");
+      console.log("[screen] OCR received invalid payload:", textRaw);
+      return;
+    }
 
+    const text = textRaw.trim();
     if (!text || text.length < 2) {
       appendLog("[screen] OCR returned empty - no AI call");
       console.log("[screen] ocr empty textRaw", textRaw);
@@ -1960,10 +1977,12 @@ window.electron.on("ocr:text", async (event, textRaw) => {
 
     const normalized = normalizeCapturedText(text);
     console.log("[screen] normalized OCR text", normalized);
+
     if (!normalized) {
       console.log("[screen] normalized text empty, skipping transcript");
       return;
     }
+
     if (liveTranscript) {
       const existing = (liveTranscript.value || "").trim();
       liveTranscript.value = (existing ? existing + "\n\n" : "") + normalized;
@@ -1977,11 +1996,13 @@ window.electron.on("ocr:text", async (event, textRaw) => {
 
   } catch (err) {
     appendLog("[screen] OCR handler error: " + err.message);
+    console.error("[screen] OCR handler full error:", err);
   } finally {
     window.windowCtl?.restore();
     setState("idle");
   }
 });
+
 
 
 

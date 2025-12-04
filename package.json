@@ -20,8 +20,7 @@
     "pdf-parse": "^1.1.4",
     "screenshot-desktop": "^1.15.3",
     "sharp": "^0.34.5",
-    "tesseract.js": "^2.1.5",
-    "tesseract.js-core": "^2.2.0"
+    "tesseract.js": "^2.1.4"
   },
   "devDependencies": {
     "electron": "^30.5.1",

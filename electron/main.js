@@ -13,6 +13,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
 
@@ -228,9 +229,7 @@ const { spawn, exec } = require("child_process");
 const os = require("os");
 const fetch = require("node-fetch");
 const cheerio = require("cheerio");
-const { URL } = require("url");
 let pdfParse = null;
-const sharp = require("sharp");
 const http = require("http");
 const IS_DEV = !app.isPackaged;
 
@@ -1846,24 +1845,101 @@ ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
 });*/
 
 // ---------------- Tesseract OCR (primary OCR engine) ----------------
+// ------------- Tesseract OCR (primary OCR engine) ----------------
+// ---------------- Tesseract OCR (stable for v4.0.2) ----------------
+// ------------------ Tesseract OCR — stable for Electron (tesseract.js 4.x) ------------------
 const { createWorker } = require("tesseract.js");
+let ocrWorker = null;
 
-ipcMain.on("ocr:image", async (event, imgBuffer) => {
+async function ensureOcrWorker() {
+  if (ocrWorker) {
+    console.log("[OCR] Reusing existing worker");
+    return ocrWorker;
+  }
+
+  const coreJsPath = require.resolve("tesseract.js-core/tesseract-core.wasm.js");
+  const wasmBinaryPath = require.resolve("tesseract.js-core/tesseract-core.wasm");
+  const corePath = pathToFileURL(coreJsPath).href;
+  const wasmBinaryUrl = pathToFileURL(wasmBinaryPath).href;
+  const langPath = path.join(__dirname, "eng.traineddata");
+  const customWorkerPath = path.join(__dirname, "tesseract-worker", "index.js");
+
+  console.log("[OCR] Bootstrapping worker");
+  console.log("[OCR] corePath:", corePath);
+  console.log("[OCR] wasmBinaryUrl:", wasmBinaryUrl);
+  console.log("[OCR] langPath:", langPath);
+
+  let originalFetch = null;
+  if (typeof globalThis.fetch === "function") {
+    originalFetch = globalThis.fetch;
+    console.log("[OCR] Temporarily disabling global fetch for local assets");
+    globalThis.fetch = undefined;
+  }
+
   try {
-    // Tesseract v6 worker
-    const worker = await createWorker("eng", {
-      workerPath: require.resolve("tesseract.js/dist/worker.min.js"),
-      corePath: require.resolve("tesseract.js-core/tesseract-core.wasm.js"),
-      langPath: path.join(__dirname, "tessdata"),
+    const worker = createWorker({
+      workerPath: customWorkerPath,
+      corePath,
+      langPath: path.dirname(langPath),
+      locateFile: (file) => {
+        if (file.endsWith("tesseract-core.wasm")) {
+          return wasmBinaryUrl;
+        }
+        return file;
+      }
     });
 
+    console.log("[OCR] Loading worker...");
+    await worker.load();
+    console.log("[OCR] Worker core loaded");
+    await worker.loadLanguage("eng");
+    console.log("[OCR] Language 'eng' loaded");
+    await worker.initialize("eng");
+    console.log("[OCR] Worker initialized");
+
+    ocrWorker = worker;
+    return worker;
+  } finally {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+      console.log("[OCR] Restored global fetch");
+    }
+  }
+}
+
+
+
+// ------------------ OCR IPC ------------------
+
+ipcMain.on("ocr:image", async (_event, payload) => {
+  try {
+    console.log("[OCR] Received payload for recognition");
+    const worker = await ensureOcrWorker();
+    let imgBuffer = null;
+    if (Buffer.isBuffer(payload)) {
+      imgBuffer = payload;
+    } else if (typeof payload === "string") {
+      imgBuffer = Buffer.from(payload, "base64");
+    } else if (payload && typeof payload.base64 === "string") {
+      imgBuffer = Buffer.from(payload.base64, "base64");
+    } else if (payload instanceof Uint8Array || Array.isArray(payload)) {
+      imgBuffer = Buffer.from(payload);
+    } else if (payload?.data && Array.isArray(payload.data)) {
+      imgBuffer = Buffer.from(payload.data);
+    }
+
+    if (!imgBuffer || imgBuffer.length === 0) {
+      throw new Error("invalid OCR payload");
+    }
+
+    console.log("[OCR] Buffer size:", imgBuffer.length);
     const result = await worker.recognize(imgBuffer);
-    await worker.terminate();
-
-    send("ocr:text", result.data.text || "");
-
+    console.log("[OCR] Recognition complete, characters:", result?.data?.text?.length || 0);
+    send("ocr:text", result.data?.text || "");
   } catch (err) {
-    send("ocr:text", "OCR Error: " + err.message);
+    const message = err?.message || String(err || "unknown error");
+    console.error("[OCR] Error during recognition:", message);
+    send("ocr:text", "OCR Error: " + message);
   }
 });
 
@@ -2146,9 +2222,19 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       };
     }
 
+    const displayWidth = Math.max(
+      1,
+      Number(display?.size?.width) || Number(display?.bounds?.width) || 1
+    );
+    const displayHeight = Math.max(
+      1,
+      Number(display?.size?.height) || Number(display?.bounds?.height) || 1
+    );
+    const scaleFactor = Number(display?.scaleFactor) || 1;
+
     const thumbSize = {
-      width: Math.max(1, Math.floor(display.size.width * (display.scaleFactor || 1))),
-      height: Math.max(1, Math.floor(display.size.height * (display.scaleFactor || 1)))
+      width: Math.max(1, Math.floor(displayWidth * scaleFactor)),
+      height: Math.max(1, Math.floor(displayHeight * scaleFactor))
     };
 
     console.log("[screenread] display", { id: display.id, bounds: display.bounds });
@@ -2177,8 +2263,8 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
     }
 
     const imageSize = nativeImage.getSize();
-    const xScale = imageSize.width / Math.max(1, display.size.width);
-    const yScale = imageSize.height / Math.max(1, display.size.height);
+    const xScale = imageSize.width / displayWidth;
+    const yScale = imageSize.height / displayHeight;
 
     const left = Math.max(
       0,
@@ -2203,18 +2289,33 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       Math.min(imageSize.height - top, Math.round(captureRegion.height * yScale))
     );
 
-    const png = nativeImage.toPNG();
-    const buffer = await sharp(png)
-      .extract({ left, top, width, height: heightPx })
-      .png()
-      .toBuffer();
+    const cropRect = { x: left, y: top, width, height: heightPx };
+    const cropped = nativeImage.crop(cropRect);
+    if (!cropped || cropped.isEmpty()) {
+      return {
+        ok: false,
+        error: "screen capture blocked (enable Screen Recording permission for Haloryn)"
+      };
+    }
 
-    console.log(
-      "[screenread] captured region",
-      { left, top, width, heightPx, sourceWidth: imageSize.width, sourceHeight: imageSize.height }
-    );
+    const pngBuffer = cropped.toPNG();
+    if (!pngBuffer || pngBuffer.length === 0) {
+      return {
+        ok: false,
+        error: "screen capture returned empty buffer"
+      };
+    }
 
-    return { ok: true, buffer };
+    console.log("[screenread] captured region", {
+      left,
+      top,
+      width,
+      heightPx,
+      sourceWidth: imageSize.width,
+      sourceHeight: imageSize.height
+    });
+
+    return { ok: true, base64: pngBuffer.toString("base64") };
   } catch (err) {
     console.error("[screenread:capture-below] error", err);
     return { ok: false, error: err.message };
