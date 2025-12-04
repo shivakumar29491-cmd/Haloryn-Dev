@@ -1722,8 +1722,8 @@ function flushLiveTranscriptStream() {
 
 resetLiveTranscriptStream();
 
-//---------------------------------------------
 
+//---------------------------------------------
 // SCREEN READ (Background capture)
 // ---------------------------------------------
 on(screenReadBtn, "click", async () => {
@@ -1745,12 +1745,14 @@ on(screenReadBtn, "click", async () => {
     return;
   }
 
-  window.windowCtl?.minimize();
+  // Restore window BEFORE capture
+  window.windowCtl?.restore();
+  await new Promise(r => setTimeout(r, 150));
 
   try {
     setCaptureClean(true);
 
-    // Capture pixels from screen
+    // -------------------- SCREEN CAPTURE --------------------
     const res = await window.electronAPI.captureScreenBelow(region);
     console.log("[screen] capture response", res);
 
@@ -1765,12 +1767,31 @@ on(screenReadBtn, "click", async () => {
       return;
     }
 
+    // Use the captured image
+    const base64 = res.base64;
+
+    // -------------------- VALIDATION BLOCK --------------------
+    if (!region || !region.width || !region.height) {
+      console.warn("[screen] OCR blocked — invalid region:", region);
+      return;
+    }
+
+    if (!base64 || base64.length < 100) {
+      console.warn("[screen] OCR blocked — capture too small:", base64?.length);
+      return;
+    }
+
+    const validation = await window.electronAPI.ocrValidate(base64);
+    if (!validation?.ok) {
+      console.warn("[screen] OCR blocked — backend rejected:", validation?.reason);
+      return;
+    }
+
     console.log("[screen] sending capture to OCR");
 
-    // 🔥 Native OCR call
-    const text = await window.electronAPI.ocrImage(res.base64);
+    // -------------------- OCR PROCESS --------------------
+    const text = await window.electronAPI.ocrImage(base64);
 
-    // 🔥 Process and display OCR → transcript → chat
     await processOcrText(text);
 
   } catch (err) {
@@ -1790,8 +1811,6 @@ function cleanupScreenRead() {
   window.windowCtl?.restore();
   setState("idle");
 }
-
-
 
 
 // --- Incognito (hide taskbar/tray + block screen capture; keep app visible) ---

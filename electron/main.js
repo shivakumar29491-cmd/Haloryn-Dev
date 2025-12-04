@@ -1856,6 +1856,31 @@ console.log("[DEBUG] process.platform =", process.platform);
 // REMOVE tesseract.js references entirely
 // let ocrWorker = null;
 // const { createWorker } = require("tesseract.js");
+const sharp = require("sharp");
+// --- NEW: Guard against invalid OCR payload BEFORE spawning Tesseract ---
+ipcMain.handle("ocr:validate", async (_event, payload) => {
+  try {
+    let imgBuffer = null;
+
+    if (Buffer.isBuffer(payload)) {
+      imgBuffer = payload;
+    } else if (typeof payload === "string") {
+      imgBuffer = Buffer.from(payload, "base64");
+    } else if (payload?.base64) {
+      imgBuffer = Buffer.from(payload.base64, "base64");
+    } else if (payload?.data) {
+      imgBuffer = Buffer.from(payload.data);
+    }
+
+    if (!imgBuffer || imgBuffer.length < 1000) {
+      return { ok: false, reason: "empty_or_invalid" };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+});
 
 ipcMain.handle("ocr:image", async (_event, payload) => {
   try {
@@ -1886,13 +1911,33 @@ ipcMain.handle("ocr:image", async (_event, payload) => {
     // 2. Write temp PNG file
     //-------------------------------------------------------
     const tempFile = path.join(os.tmpdir(), `ocr_${Date.now()}.png`);
-    fs.writeFileSync(tempFile, imgBuffer);
+    // macOS Retina fix — downscale 2× images
+let finalBuffer = imgBuffer;
+
+if (process.platform === "darwin") {
+  try {
+    finalBuffer = await sharp(imgBuffer)
+      .resize({ 
+        width: Math.round((await sharp(imgBuffer).metadata()).width / 2),
+        height: Math.round((await sharp(imgBuffer).metadata()).height / 2)
+      })
+      .png()
+      .toBuffer();
+    console.log("[OCR] Retina image downscaled");
+  } catch (e) {
+    console.warn("[OCR] Failed to downscale Retina image:", e.message);
+  }
+}
+
+fs.writeFileSync(tempFile, finalBuffer);
+
     console.log("[OCR] Temp image created:", tempFile);
 
     //-------------------------------------------------------
     // 3. Identify Tesseract binary per OS
     //-------------------------------------------------------
-    let tesseractBin = "/opt/homebrew/bin/tesseract"; // macOS default
+    let tesseractBin = "/usr/local/bin/tesseract";
+ // macOS default
 
     if (process.platform === "win32") {
       tesseractBin = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";

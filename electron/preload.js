@@ -30,16 +30,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
    getSummary: () => ipcRenderer.invoke("get-summary"),
    finishSession: (payload) => ipcRenderer.send("finish-session", payload),
    exitApp: () => ipcRenderer.send("exit-app"),
+    // Screen Read
+captureScreenBelow: (region) => ipcRenderer.invoke("screenread:capture-below", region),
+getScreenReadRegion: () => ipcRenderer.invoke("screenread:get-region"),
+saveScreenReadRegion: (region) => ipcRenderer.invoke("screenread:save-region", region),
+launchApp: (cmd) => ipcRenderer.invoke("screenread:launch-app", cmd),
+openScreenOverlay: (region) => ipcRenderer.invoke("screenread:open-overlay", region),
 
-   // Screen Read
-   captureScreenBelow: (region) => ipcRenderer.invoke("screenread:capture-below", region),
-   getScreenReadRegion: () => ipcRenderer.invoke("screenread:get-region"),
-   saveScreenReadRegion: (region) => ipcRenderer.invoke("screenread:save-region", region),
-   launchApp: (cmd) => ipcRenderer.invoke("screenread:launch-app", cmd),
-   openScreenOverlay: (region) => ipcRenderer.invoke("screenread:open-overlay", region),
+// 🔥 Native OCR
+ocrImage: (base64) => ipcRenderer.invoke("ocr:image", base64),
 
-   // 🔥 NEW — Native OCR using invoke
-   ocrImage: (base64) => ipcRenderer.invoke("ocr:image", base64),
+// 🔥 REQUIRED — Validation handler (you were missing this!)
+ocrValidate: (base64) => ipcRenderer.invoke("ocr:validate", base64),
 
 
    onTriggerFinishSession: (cb) => {
