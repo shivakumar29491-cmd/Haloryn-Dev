@@ -26,3 +26,4 @@ logs/
 
 electron/tessdata/
 electron/eng.traineddata
+.env
