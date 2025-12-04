@@ -23,16 +23,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
    maximize: () => ipcRenderer.invoke('window:maximize'),
    restore:  () => ipcRenderer.invoke('window:restore'),
    close:    () => ipcRenderer.invoke('window:close'),
-     clearHistoryByRange: (range) => ipcRenderer.invoke("activity:clear-range", range),
+
+   clearHistoryByRange: (range) => ipcRenderer.invoke("activity:clear-range", range),
+
    // Session + summary
    getSummary: () => ipcRenderer.invoke("get-summary"),
    finishSession: (payload) => ipcRenderer.send("finish-session", payload),
    exitApp: () => ipcRenderer.send("exit-app"),
+
+   // Screen Read
    captureScreenBelow: (region) => ipcRenderer.invoke("screenread:capture-below", region),
    getScreenReadRegion: () => ipcRenderer.invoke("screenread:get-region"),
    saveScreenReadRegion: (region) => ipcRenderer.invoke("screenread:save-region", region),
    launchApp: (cmd) => ipcRenderer.invoke("screenread:launch-app", cmd),
    openScreenOverlay: (region) => ipcRenderer.invoke("screenread:open-overlay", region),
+
+   // 🔥 NEW — Native OCR using invoke
+   ocrImage: (base64) => ipcRenderer.invoke("ocr:image", base64),
+
+
    onTriggerFinishSession: (cb) => {
        if (typeof cb !== "function") return () => {};
        const listener = (_event, ...args) => cb(...args);
@@ -48,13 +57,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
    loadActivity: () => ipcRenderer.invoke("load-activity"),
 
    // LLM + location
-// LLM + location
-ask: (prompt) => ipcRenderer.invoke("ask", prompt),
-chatAsk: (prompt) => ipcRenderer.invoke("chat:ask", prompt),
+   ask: (prompt) => ipcRenderer.invoke("ask", prompt),
+   chatAsk: (prompt) => ipcRenderer.invoke("chat:ask", prompt),
    requestIpLocation: () => ipcRenderer.invoke("location:request-ip"),
    setLocation: (location) => ipcRenderer.invoke("location:set", location),
    getLocation: () => ipcRenderer.invoke("location:get")
 });
+
 
 // Summary page API
 //contextBridge.exposeInMainWorld('sessionAPI', {

@@ -1844,78 +1844,28 @@ ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
   }
 });*/
 
-// ---------------- Tesseract OCR (primary OCR engine) ----------------
-// ------------- Tesseract OCR (primary OCR engine) ----------------
-// ---------------- Tesseract OCR (stable for v4.0.2) ----------------
-// ------------------ Tesseract OCR — stable for Electron (tesseract.js 4.x) ------------------
-const { createWorker } = require("tesseract.js");
-let ocrWorker = null;
+// ------------------ OCR (Native Tesseract CLI) ------------------
 
-async function ensureOcrWorker() {
-  if (ocrWorker) {
-    console.log("[OCR] Reusing existing worker");
-    return ocrWorker;
-  }
+console.log("[DEBUG] process.platform =", process.platform);
 
-  const coreJsPath = require.resolve("tesseract.js-core/tesseract-core.wasm.js");
-  const wasmBinaryPath = require.resolve("tesseract.js-core/tesseract-core.wasm");
-  const corePath = pathToFileURL(coreJsPath).href;
-  const wasmBinaryUrl = pathToFileURL(wasmBinaryPath).href;
-  const langPath = path.join(__dirname, "eng.traineddata");
-  const customWorkerPath = path.join(__dirname, "tesseract-worker", "index.js");
+//const { spawn } = require("child_process");
+//const os = require("os");
+//const fs = require("fs");
+//const path = require("path");
 
-  console.log("[OCR] Bootstrapping worker");
-  console.log("[OCR] corePath:", corePath);
-  console.log("[OCR] wasmBinaryUrl:", wasmBinaryUrl);
-  console.log("[OCR] langPath:", langPath);
+// REMOVE tesseract.js references entirely
+// let ocrWorker = null;
+// const { createWorker } = require("tesseract.js");
 
-  let originalFetch = null;
-  if (typeof globalThis.fetch === "function") {
-    originalFetch = globalThis.fetch;
-    console.log("[OCR] Temporarily disabling global fetch for local assets");
-    globalThis.fetch = undefined;
-  }
-
+ipcMain.handle("ocr:image", async (_event, payload) => {
   try {
-    const worker = createWorker({
-      workerPath: customWorkerPath,
-      corePath,
-      langPath: path.dirname(langPath),
-      locateFile: (file) => {
-        if (file.endsWith("tesseract-core.wasm")) {
-          return wasmBinaryUrl;
-        }
-        return file;
-      }
-    });
+    console.log("[OCR] Received payload for native Tesseract");
 
-    console.log("[OCR] Loading worker...");
-    await worker.load();
-    console.log("[OCR] Worker core loaded");
-    await worker.loadLanguage("eng");
-    console.log("[OCR] Language 'eng' loaded");
-    await worker.initialize("eng");
-    console.log("[OCR] Worker initialized");
-
-    ocrWorker = worker;
-    return worker;
-  } finally {
-    if (originalFetch) {
-      globalThis.fetch = originalFetch;
-      console.log("[OCR] Restored global fetch");
-    }
-  }
-}
-
-
-
-// ------------------ OCR IPC ------------------
-
-ipcMain.on("ocr:image", async (_event, payload) => {
-  try {
-    console.log("[OCR] Received payload for recognition");
-    const worker = await ensureOcrWorker();
+    //-------------------------------------------------------
+    // 1. Normalize incoming image buffer
+    //-------------------------------------------------------
     let imgBuffer = null;
+
     if (Buffer.isBuffer(payload)) {
       imgBuffer = payload;
     } else if (typeof payload === "string") {
@@ -1929,19 +1879,65 @@ ipcMain.on("ocr:image", async (_event, payload) => {
     }
 
     if (!imgBuffer || imgBuffer.length === 0) {
-      throw new Error("invalid OCR payload");
+      return "OCR Error: Invalid OCR payload";
     }
 
-    console.log("[OCR] Buffer size:", imgBuffer.length);
-    const result = await worker.recognize(imgBuffer);
-    console.log("[OCR] Recognition complete, characters:", result?.data?.text?.length || 0);
-    send("ocr:text", result.data?.text || "");
+    //-------------------------------------------------------
+    // 2. Write temp PNG file
+    //-------------------------------------------------------
+    const tempFile = path.join(os.tmpdir(), `ocr_${Date.now()}.png`);
+    fs.writeFileSync(tempFile, imgBuffer);
+    console.log("[OCR] Temp image created:", tempFile);
+
+    //-------------------------------------------------------
+    // 3. Identify Tesseract binary per OS
+    //-------------------------------------------------------
+    let tesseractBin = "/opt/homebrew/bin/tesseract"; // macOS default
+
+    if (process.platform === "win32") {
+      tesseractBin = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
+    }
+
+    console.log("[OCR] Using binary:", tesseractBin);
+
+    //-------------------------------------------------------
+    // 4. Run Tesseract via spawn
+    //-------------------------------------------------------
+    const args = [tempFile, "stdout", "-l", "eng"];
+    const proc = spawn(tesseractBin, args);
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+    proc.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+
+    const exitCode = await new Promise((resolve) => {
+      proc.on("close", resolve);
+    });
+
+    console.log("[OCR] Tesseract exited with code:", exitCode);
+
+    // Cleanup temp file
+    fs.unlink(tempFile, () => {});
+
+    if (exitCode !== 0) {
+      console.error("[OCR] ERROR:", stderr);
+      return "OCR Error: " + (stderr || "Unknown error");
+    }
+
+    const text = (stdout || "").trim();
+    console.log("[OCR] Text length:", text.length);
+
+    return text;
+
   } catch (err) {
-    const message = err?.message || String(err || "unknown error");
-    console.error("[OCR] Error during recognition:", message);
-    send("ocr:text", "OCR Error: " + message);
+    console.error("[OCR] Exception:", err);
+    return "OCR Error: " + (err?.message || err);
   }
 });
+
+
 
 
 

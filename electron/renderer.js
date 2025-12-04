@@ -1731,48 +1731,68 @@ on(screenReadBtn, "click", async () => {
   screenReadBtn.disabled = true;
   screenReadBtn.classList.add("active");
   setState("screen: capturing...");
+
   console.log("[screen] capture requested");
+
+  // Minimize for region selection
   window.windowCtl?.minimize();
   const region = await selectScreenRegion();
   window.windowCtl?.restore();
+
   if (!region) {
     appendLog("[screen] region not configured");
-    screenReadBtn.disabled = false;
-    screenReadBtn.classList.remove("active");
-    setState("idle");
+    cleanupScreenRead();
     return;
   }
+
   window.windowCtl?.minimize();
+
   try {
     setCaptureClean(true);
+
+    // Capture pixels from screen
     const res = await window.electronAPI.captureScreenBelow(region);
     console.log("[screen] capture response", res);
-    if (res?.base64) {
-      console.log("[screen] base64 length", res.base64.length);
-    }
+
     if (!res?.ok) {
       appendLog("[screen] capture failed: " + (res?.error || "no data"));
       return;
     }
-    if (!res?.base64 || typeof res.base64 !== "string" || res.base64.length < 10) {
+
+    if (!res.base64 || res.base64.length < 10) {
       appendLog("[screen] invalid or empty capture — skipping OCR");
-      console.log("[screen] invalid capture payload:", res);
+      console.log("[screen] invalid payload:", res);
       return;
     }
 
     console.log("[screen] sending capture to OCR");
-    window.electron.send("ocr:image", { base64: res.base64 });
+
+    // 🔥 Native OCR call
+    const text = await window.electronAPI.ocrImage(res.base64);
+
+    // 🔥 Process and display OCR → transcript → chat
+    await processOcrText(text);
 
   } catch (err) {
     appendLog("[screen] capture error: " + (err?.message || err));
   } finally {
-    setCaptureClean(false);
-    screenReadBtn.disabled = false;
-    screenReadBtn.classList.remove("active");
-    window.windowCtl?.restore();
-    setState("idle");
+    cleanupScreenRead();
   }
 });
+
+// -------------------------------------------------------
+// CLEANUP HELPER
+// -------------------------------------------------------
+function cleanupScreenRead() {
+  setCaptureClean(false);
+  screenReadBtn.disabled = false;
+  screenReadBtn.classList.remove("active");
+  window.windowCtl?.restore();
+  setState("idle");
+}
+
+
+
 
 // --- Incognito (hide taskbar/tray + block screen capture; keep app visible) ---
 
@@ -1958,10 +1978,9 @@ document.addEventListener("click", (e) => {
 
 //--------------------------------------------------
 
-// ---------------- OCR → Transcript + AI ----------------
-window.electron.on("ocr:text", async (_event, textRaw) => {
+// ---------------- OCR → Transcript + AI (invoke-based) ----------------
+async function processOcrText(textRaw) {
   try {
-    // Ensure valid text
     if (!textRaw || typeof textRaw !== "string") {
       appendLog("[screen] invalid or null OCR textRaw");
       console.log("[screen] OCR received invalid payload:", textRaw);
@@ -1983,12 +2002,14 @@ window.electron.on("ocr:text", async (_event, textRaw) => {
       return;
     }
 
+    // Append to transcript textarea
     if (liveTranscript) {
       const existing = (liveTranscript.value || "").trim();
       liveTranscript.value = (existing ? existing + "\n\n" : "") + normalized;
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
+    // Push into chat input
     if (chatInput) {
       chatInput.value = normalized;
       chatInput.focus();
@@ -2001,7 +2022,8 @@ window.electron.on("ocr:text", async (_event, textRaw) => {
     window.windowCtl?.restore();
     setState("idle");
   }
-});
+}
+
 
 
 
