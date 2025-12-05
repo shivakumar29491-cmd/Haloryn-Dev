@@ -147,6 +147,25 @@ function finalizeScreenOverlay(result) {
   screenOverlayPending = null;
   if (resolver) resolver(result);
 }
+const sharp = require("sharp");
+
+async function normalizeMacImage(base64) {
+  const buffer = Buffer.from(base64, "base64");
+
+  // Get metadata
+  const meta = await sharp(buffer).metadata();
+
+  // macOS Retina = usually density 144 → scale down by 0.5
+  const scale = meta.density && meta.density > 110 ? 0.5 : 1;
+
+  return sharp(buffer)
+    .resize({
+      width: Math.round(meta.width * scale),
+      height: Math.round(meta.height * scale)
+    })
+    .png()
+    .toBuffer();
+}
 
 ipcMain.on("screenread:selection", (_event, region) => {
   console.log("[screenread] selection received", region);
@@ -1856,7 +1875,7 @@ console.log("[DEBUG] process.platform =", process.platform);
 // REMOVE tesseract.js references entirely
 // let ocrWorker = null;
 // const { createWorker } = require("tesseract.js");
-const sharp = require("sharp");
+//const sharp = require("sharp");
 // --- NEW: Guard against invalid OCR payload BEFORE spawning Tesseract ---
 ipcMain.handle("ocr:validate", async (_event, payload) => {
   try {
@@ -2213,11 +2232,27 @@ ipcMain.handle('search:stats', async () => {
     return { ok: false, error: e.message };
   }
 });
+let macNative = null;
+
+if (process.platform === "darwin") {
+  console.log("[mac-native] preloading addon...");
+  try {
+    macNative = require("./native-macos-capture/build/Release/macos_capture.node");
+    console.log(
+      "[mac-native] preloaded OK, has captureScreenRegion =",
+      typeof macNative.captureScreenRegion
+    );
+  } catch (e) {
+    console.error("[mac-native] preload failed:", e);
+  }
+}
 // Background screen capture (no snipping tool)
 ipcMain.handle("screenread:capture-below", async (_event, region) => {
   try {
     const target = BrowserWindow.getFocusedWindow() || win;
-    if (!target || target.isDestroyed()) return { ok: false, error: "window unavailable" };
+    if (!target || target.isDestroyed()) {
+      return { ok: false, error: "window unavailable" };
+    }
 
     const bounds = target.getBounds();
     const display = screen.getDisplayNearestPoint({
@@ -2225,7 +2260,17 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       y: bounds.y + bounds.height / 2
     });
 
+    console.log("[screenread] display", { id: display.id, bounds: display.bounds });
+
+    //--------------------------------------------------------------------
+    // 🔹 Compute the region (shared across mac + fallback)
+    //--------------------------------------------------------------------
     let captureRegion = null;
+
+    // ❌ OLD (buggy) lines – keep as comments so nothing is "removed"
+    // const imgBase64 = nativeAddon.captureScreenRegion(scaled);
+    // await new Promise(r => setTimeout(r, 80));
+
     if (region && typeof region.x === "number" && region.width > 0) {
       captureRegion = {
         x: region.x,
@@ -2236,16 +2281,27 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
     } else {
       const availableBelow =
         display.bounds.y + display.bounds.height - (bounds.y + bounds.height);
-      const height = Math.max(200, Math.min(400, availableBelow > 0 ? availableBelow : 400));
+
+      const height = Math.max(
+        200,
+        Math.min(400, availableBelow > 0 ? availableBelow : 400)
+      );
+
       const regionTop = Math.min(
         display.bounds.y + display.bounds.height - height,
         Math.max(display.bounds.y, bounds.y + bounds.height)
       );
+
       const regionHeight = Math.max(
         1,
         Math.min(height, display.bounds.y + display.bounds.height - regionTop)
       );
-      const regionWidth = Math.max(1, Math.min(bounds.width, display.bounds.width));
+
+      const regionWidth = Math.max(
+        1,
+        Math.min(bounds.width, display.width)
+      );
+
       const regionLeft = Math.max(
         display.bounds.x,
         Math.min(bounds.x, display.bounds.x + display.bounds.width - regionWidth)
@@ -2263,6 +2319,64 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       };
     }
 
+    //--------------------------------------------------------------------
+    // 🔥🔥🔥 macOS NATIVE CAPTURE (native-macos-capture)
+    //--------------------------------------------------------------------
+    if (process.platform === "darwin") {
+      console.log("[mac-native] attempting native capture");
+      const nativeAddon = macNative; // preload at top of main.js
+
+      if (!nativeAddon || typeof nativeAddon.captureScreenRegion !== "function") {
+        console.error("[mac-native] addon missing or invalid, falling back to Electron");
+      } else {
+        try {
+          // small delay so overlay / window state settles
+          await new Promise(r => setTimeout(r, 80));
+
+          console.log(
+            "[mac-native] addon loaded. has captureScreenRegion =",
+            typeof nativeAddon.captureScreenRegion
+          );
+
+          const scale = screen.getPrimaryDisplay().scaleFactor || 1;
+
+          // Apply generous padding before scaling (fixes clipped multi-line)
+          const pad = 30;
+          const padded = {
+            x: captureRegion.x - pad,
+            y: captureRegion.y - pad,
+            width: captureRegion.width + pad * 2,
+            height: captureRegion.height + pad * 2
+          };
+
+          const scaled = {
+            x: Math.round(padded.x * scale),
+            y: Math.round(padded.y * scale),
+            width: Math.round(padded.width * scale),
+            height: Math.round(padded.height * scale)
+          };
+
+          console.log("[mac-native] scaled region:", scaled);
+
+          const imgBase64 = nativeAddon.captureScreenRegion(scaled);
+
+          if (imgBase64) {
+            console.log("[mac-native] capture success");
+            const normalized = await normalizeMacImage(imgBase64);
+            return { ok: true, base64: normalized.toString("base64") };
+          } else {
+            console.error("[mac-native] addon returned empty image");
+          }
+        } catch (err) {
+          console.error("[mac-native] failed, falling back:", err);
+        }
+      }
+    }
+
+    //--------------------------------------------------------------------
+    // 🔹 FALLBACK (Electron desktopCapturer) — unchanged
+    //--------------------------------------------------------------------
+
     const displayWidth = Math.max(
       1,
       Number(display?.size?.width) || Number(display?.bounds?.width) || 1
@@ -2278,90 +2392,36 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       height: Math.max(1, Math.floor(displayHeight * scaleFactor))
     };
 
-    console.log("[screenread] display", { id: display.id, bounds: display.bounds });
-
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
       thumbnailSize: thumbSize
     });
 
-    if (!sources.length) {
-      return { ok: false, error: "screen source missing" };
+    const screenSource =
+      sources.find(src => src.display_id === String(display.id)) || sources[0];
+
+    if (!screenSource) {
+      return { ok: false, error: "fallback capture failed: no source" };
     }
 
-    const parseDisplayId = (src) => {
-      if (!src) return null;
-      if (src.display_id) return Number(src.display_id);
-      const parts = (src.id || "").split(":");
-      return parts.length >= 2 ? Number(parts[1]) : null;
+    const fullImg = screenSource.thumbnail;
+    if (!fullImg || fullImg.isEmpty()) {
+      return { ok: false, error: "fallback capture failed: empty image" };
+    }
+
+    const cropped = fullImg.crop(captureRegion);
+    return {
+      ok: true,
+      base64: cropped.toDataURL().replace(/^data:image\/png;base64,/, "")
     };
 
-    const matched = sources.find((src) => parseDisplayId(src) === display.id);
-    const source = matched || sources[0];
-    const nativeImage = source?.thumbnail;
-    if (!nativeImage) {
-      return { ok: false, error: "thumbnail missing" };
-    }
-
-    const imageSize = nativeImage.getSize();
-    const xScale = imageSize.width / displayWidth;
-    const yScale = imageSize.height / displayHeight;
-
-    const left = Math.max(
-      0,
-      Math.min(
-        imageSize.width - 1,
-        Math.round((captureRegion.x - display.bounds.x) * xScale)
-      )
-    );
-    const top = Math.max(
-      0,
-      Math.min(
-        imageSize.height - 1,
-        Math.round((captureRegion.y - display.bounds.y) * yScale)
-      )
-    );
-    const width = Math.max(
-      1,
-      Math.min(imageSize.width - left, Math.round(captureRegion.width * xScale))
-    );
-    const heightPx = Math.max(
-      1,
-      Math.min(imageSize.height - top, Math.round(captureRegion.height * yScale))
-    );
-
-    const cropRect = { x: left, y: top, width, height: heightPx };
-    const cropped = nativeImage.crop(cropRect);
-    if (!cropped || cropped.isEmpty()) {
-      return {
-        ok: false,
-        error: "screen capture blocked (enable Screen Recording permission for Haloryn)"
-      };
-    }
-
-    const pngBuffer = cropped.toPNG();
-    if (!pngBuffer || pngBuffer.length === 0) {
-      return {
-        ok: false,
-        error: "screen capture returned empty buffer"
-      };
-    }
-
-    console.log("[screenread] captured region", {
-      left,
-      top,
-      width,
-      heightPx,
-      sourceWidth: imageSize.width,
-      sourceHeight: imageSize.height
-    });
-
-    return { ok: true, base64: pngBuffer.toString("base64") };
   } catch (err) {
     console.error("[screenread:capture-below] error", err);
     return { ok: false, error: err.message };
   }
 });
+
+
 
 
 // ---------------- Window controls / env ----------------

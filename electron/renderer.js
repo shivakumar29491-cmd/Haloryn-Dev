@@ -556,18 +556,35 @@ function clampToWindow(region) {
 }
 
 async function persistScreenRegion(region) {
-  if (!region || typeof region.x !== "number" || region.width <= 0 || region.height <= 0) {
+  if (
+    !region ||
+    typeof region.x !== "number" ||
+    typeof region.y !== "number" ||
+    region.width <= 0 ||
+    region.height <= 0
+  ) {
+    console.warn("[screen] invalid region passed to persist:", region);
     return null;
   }
+
   try {
+    console.log("[screen] SAVING NEW REGION:", region);
+
+    // ALWAYS overwrite cache — avoids stale region issues
+    screenRegionCache = { ...region };
+
+    // Save to backend (main.js)
     const result = await window.electronAPI.saveScreenReadRegion(region);
-    console.log("[screen] save region result", result);
+    console.log("[screen] save region result:", result);
+
+    return screenRegionCache;
+
   } catch (err) {
-    console.error("[screen] save region error", err);
+    console.error("[screen] save region error:", err);
+    return null;
   }
-  screenRegionCache = region;
-  return screenRegionCache;
 }
+
 
 async function inlineScreenRegion(initialRegion = null) {
   const selected = await showRegionSelector(initialRegion);
@@ -587,9 +604,10 @@ async function selectScreenRegion() {
   }
 
   const initialRegion = screenRegionCache || storedRegion || null;
-  if (initialRegion && !screenRegionCache) {
-    screenRegionCache = initialRegion;
-  }
+  if (initialRegion) {
+    screenRegionCache = initialRegion;   // always refresh cache
+}
+
 
   if (window.electronAPI?.openScreenOverlay) {
     try {
@@ -1735,15 +1753,49 @@ on(screenReadBtn, "click", async () => {
   console.log("[screen] capture requested");
 
   // Minimize for region selection
-  window.windowCtl?.minimize();
-  const region = await selectScreenRegion();
-  window.windowCtl?.restore();
+    // Old:
+  // window.windowCtl?.minimize();
+  // const regionRaw = await selectScreenRegion();
+  // window.windowCtl?.restore();
 
-  if (!region) {
+  let shouldRestore = false;
+
+  // 1) Minimize window before region selection
+  if (window.windowCtl?.minimize) {
+    window.windowCtl.minimize();
+    shouldRestore = true;
+  }
+
+  // 2) Let user select the region
+  const regionRaw = await selectScreenRegion();
+
+  // 3) If user cancels, restore immediately and bail out
+  if (!regionRaw) {
     appendLog("[screen] region not configured");
+    if (shouldRestore) window.windowCtl?.restore();
     cleanupScreenRead();
     return;
   }
+
+  // 4) Schedule restore slightly later so capture runs while window is hidden
+  if (shouldRestore) {
+    setTimeout(() => {
+      try { window.windowCtl?.restore(); } catch {}
+    }, 250);
+  }
+
+
+  // ---------------- PATCH C: SCALE REGION ----------------
+  const scale = window.devicePixelRatio || 1;
+  const region = {
+    x: Math.round(regionRaw.x * scale),
+    y: Math.round(regionRaw.y * scale),
+    width: Math.round(regionRaw.width * scale),
+    height: Math.round(regionRaw.height * scale)
+  };
+
+  console.log("[screen] FINAL SCALED REGION:", region);
+  // -------------------------------------------------------
 
   // Restore window BEFORE capture
   window.windowCtl?.restore();
@@ -1751,6 +1803,7 @@ on(screenReadBtn, "click", async () => {
 
   try {
     setCaptureClean(true);
+    console.log("[overlay selection] region:", region);
 
     // -------------------- SCREEN CAPTURE --------------------
     const res = await window.electronAPI.captureScreenBelow(region);
