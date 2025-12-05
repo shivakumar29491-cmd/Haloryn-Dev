@@ -138,6 +138,7 @@ ipcMain.handle("screenread:launch-app", (_e, command) => {
   }
 });
 
+/* [SNIP OVERLAY DISABLED -- original implementation retained for reference]
 let screenOverlayWindow = null;
 let screenOverlayPending = null;
 
@@ -176,6 +177,12 @@ ipcMain.on("screenread:selection-cancel", () => {
   console.log("[screenread] selection canceled");
   finalizeScreenOverlay({ ok: false, error: "canceled" });
 });
+ipcMain.handle("window:await-minimized", async () => {
+  return new Promise(resolve => {
+    if (mainWindow.isMinimized()) return resolve(true);
+    mainWindow.once("minimize", () => resolve(true));
+  });
+});
 
 ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
   if (screenOverlayPending) {
@@ -190,25 +197,28 @@ ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
   console.log("[screenread] overlay request", { displayId: display?.id, initialRegion });
 
   screenOverlayWindow = new BrowserWindow({
-    x: display.bounds.x,
-    y: display.bounds.y,
-    width: display.bounds.width,
-    height: display.bounds.height,
-    frame: false,
-    transparent: true,
-    movable: false,
-    resizable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    focusable: true,
-    hasShadow: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      backgroundThrottling: false
-    }
-  });
+  x: display.bounds.x,
+  y: display.bounds.y,
+  width: display.bounds.width,
+  height: display.bounds.height,
+  frame: false,
+  transparent: true,
+  backgroundColor: '#00000000',
+  hasShadow: false,
+  resizable: false,
+  movable: false,
+  fullscreenable: false,
+  skipTaskbar: true,
+  alwaysOnTop: true,
+  focusable: true,
+  vibrancy: null,
+  visualEffectState: 'inactive',
+  webPreferences: {
+    nodeIntegration: true,
+    contextIsolation: false,
+    backgroundThrottling: false
+  }
+});
 
   screenOverlayWindow.setMenuBarVisibility(false);
   screenOverlayWindow.setAlwaysOnTop(true, "screen-saver");
@@ -241,6 +251,150 @@ ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
 
   return promise;
 });
+*/
+
+// [REGION TOOL OVERLAY] replaces the legacy snip overlay implementation
+let regionToolWindow = null;
+let regionToolPending = null;
+let regionToolDisplayBounds = null;
+let regionToolInitialRegion = null;
+
+function cleanupRegionTool(payload) {
+  if (regionToolPending) {
+    const resolve = regionToolPending;
+    regionToolPending = null;
+    try {
+      resolve(payload);
+    } catch (err) {
+      console.warn("[screenread] region tool resolver failed", err);
+    }
+  }
+
+  regionToolInitialRegion = null;
+  regionToolDisplayBounds = null;
+
+  const overlay = regionToolWindow;
+  regionToolWindow = null;
+
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.removeAllListeners("closed");
+    try {
+      overlay.close();
+    } catch {}
+  }
+}
+
+function sendRegionToolInit() {
+  if (!regionToolWindow || regionToolWindow.isDestroyed()) return;
+  regionToolWindow.webContents.send("region-tool:init", {
+    displayBounds: regionToolDisplayBounds,
+    initialRegion: regionToolInitialRegion
+  });
+}
+
+ipcMain.on("region-tool:ready", (event) => {
+  if (!regionToolWindow || event.sender !== regionToolWindow.webContents) return;
+  sendRegionToolInit();
+});
+
+ipcMain.on("region-tool:confirm", (_event, region) => {
+  if (
+    !region ||
+    typeof region.x !== "number" ||
+    typeof region.y !== "number" ||
+    region.width < 4 ||
+    region.height < 4
+  ) {
+    cleanupRegionTool({ ok: false, error: "invalid region" });
+    return;
+  }
+
+  const offsetX = regionToolDisplayBounds?.x || 0;
+  const offsetY = regionToolDisplayBounds?.y || 0;
+  const normalized = {
+    x: Math.round(region.x + offsetX),
+    y: Math.round(region.y + offsetY),
+    width: Math.round(region.width),
+    height: Math.round(region.height)
+  };
+
+  cleanupRegionTool({ ok: true, region: normalized });
+});
+
+ipcMain.on("region-tool:cancel", () => {
+  cleanupRegionTool({ ok: false, error: "canceled" });
+});
+
+ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
+  if (regionToolPending) {
+    return { ok: false, error: "overlay busy" };
+  }
+
+  const target = BrowserWindow.getFocusedWindow() || win;
+  const anchorBounds =
+    target && !target.isDestroyed() ? target.getBounds() : { x: 0, y: 0 };
+  const display =
+    screen.getDisplayNearestPoint({
+      x: anchorBounds.x,
+      y: anchorBounds.y
+    }) || screen.getPrimaryDisplay();
+
+  regionToolDisplayBounds = display?.bounds || { x: 0, y: 0, width: 0, height: 0 };
+  regionToolInitialRegion = initialRegion || null;
+
+  regionToolWindow = new BrowserWindow({
+    x: regionToolDisplayBounds.x,
+    y: regionToolDisplayBounds.y,
+    width: regionToolDisplayBounds.width,
+    height: regionToolDisplayBounds.height,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    focusable: true,
+    skipTaskbar: true,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "renderer/regionToolPreload.js"),
+      contextIsolation: true
+    }
+  });
+
+  regionToolWindow.setAlwaysOnTop(true, "screen-saver");
+  regionToolWindow.setVisibleOnAllWorkspaces(true);
+
+  const promise = new Promise((resolve) => {
+    regionToolPending = resolve;
+  });
+
+  regionToolWindow.on("closed", () => {
+    cleanupRegionTool({ ok: false, error: "overlay closed" });
+  });
+
+  await regionToolWindow.loadFile(path.join(__dirname, "renderer/regionTool.html"));
+  regionToolWindow.showInactive();
+
+  return promise;
+});
+
+const sharp = require("sharp");
+
+async function normalizeMacImage(base64) {
+  const buffer = Buffer.from(base64, "base64");
+  const meta = await sharp(buffer).metadata();
+  const scale = meta.density && meta.density > 110 ? 0.5 : 1;
+  return sharp(buffer)
+    .resize({
+      width: Math.round(meta.width * scale),
+      height: Math.round(meta.height * scale)
+    })
+    .png()
+    .toBuffer();
+}
 
 //safeChdir(__dirname);
 
@@ -2223,29 +2377,61 @@ ipcMain.handle('webplus:set', async(_e, flag)=>{
 });
 
 // NEW: expose provider stats to the renderer for the API usage panel
-ipcMain.handle('search:stats', async () => {
+ipcMain.handle("search:stats", async () => {
   try {
-    const stats = typeof getProviderStats === 'function' ? getProviderStats() : {};
+    const stats = typeof getProviderStats === "function" ? getProviderStats() : {};
     return { ok: true, stats };
   } catch (e) {
-    send('log', `[search:stats:error] ${e.message}`);
+    send("log", `[search:stats:error] ${e.message}`);
     return { ok: false, error: e.message };
   }
 });
+
+// --------------------------------------------------------
+// macOS Native Screen Capture Loader (safe, deduped)
+// --------------------------------------------------------
+//const fs = require("fs");
+//const path = require("path");
+
+function resolveNativeAddon() {
+  const candidates = [
+    // Running from project root
+    path.resolve(process.cwd(), "native-macos-capture/build/Release/macos_capture.node"),
+
+    // Running from electron/
+    path.resolve(__dirname, "../native-macos-capture/build/Release/macos_capture.node"),
+
+    // Packaged app (resources)
+    path.resolve(process.resourcesPath || "", "native-macos-capture/build/Release/macos_capture.node")
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      console.log("[mac-native] Using addon at:", p);
+      return p;
+    }
+  }
+
+  console.error("[mac-native] No valid addon found. Candidates:", candidates);
+  return null;
+}
+
 let macNative = null;
 
-if (process.platform === "darwin") {
-  console.log("[mac-native] preloading addon...");
-  try {
-    macNative = require("./native-macos-capture/build/Release/macos_capture.node");
-    console.log(
-      "[mac-native] preloaded OK, has captureScreenRegion =",
-      typeof macNative.captureScreenRegion
-    );
-  } catch (e) {
-    console.error("[mac-native] preload failed:", e);
+try {
+  const addonPath = resolveNativeAddon();
+
+  if (addonPath) {
+    macNative = require(addonPath);
+    console.log("[mac-native] addon loaded OK");
+  } else {
+    console.log("[mac-native] addon unavailable — fallback will be used");
   }
+} catch (err) {
+  console.error("[mac-native] preload failed:", err);
 }
+
+
 // Background screen capture (no snipping tool)
 ipcMain.handle("screenread:capture-below", async (_event, region) => {
   try {
@@ -2298,9 +2484,10 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       );
 
       const regionWidth = Math.max(
-        1,
-        Math.min(bounds.width, display.width)
-      );
+  1,
+  Math.min(bounds.width, display.bounds.width)
+);
+
 
       const regionLeft = Math.max(
         display.bounds.x,

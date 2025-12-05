@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
    maximize: () => ipcRenderer.invoke('window:maximize'),
    restore:  () => ipcRenderer.invoke('window:restore'),
    close:    () => ipcRenderer.invoke('window:close'),
+    awaitMinimize: () => ipcRenderer.invoke("window:await-minimized"),
 
    clearHistoryByRange: (range) => ipcRenderer.invoke("activity:clear-range", range),
 

@@ -247,15 +247,19 @@ function ensureRegionStyle() {
   const style = document.createElement("style");
   style.id = "screen-region-style";
   style.textContent = `
+
+
 .screen-region-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 8, 16, 0.5);
-  z-index: 99999;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  background: none !important;
+  opacity: 1 !important;
+  z-index: 999999;
 }
+
+
+
+
 .screen-region-selector {
   position: absolute;
   border: 2px dashed #40c4ff;
@@ -608,11 +612,11 @@ async function selectScreenRegion() {
     screenRegionCache = initialRegion;   // always refresh cache
 }
 
-
   if (window.electronAPI?.openScreenOverlay) {
     try {
       const overlayRes = await window.electronAPI.openScreenOverlay(initialRegion);
-      console.log("[screen] overlay helper response", overlayRes);
+      console.debug("[screen] overlay helper response", overlayRes);
+
       if (overlayRes?.ok && overlayRes.region?.width > 4 && overlayRes.region?.height > 4) {
         return await persistScreenRegion(overlayRes.region);
       }
@@ -645,11 +649,16 @@ function normalizeCapturedText(text) {
     .map((line) => line.trim())
     .filter(Boolean);
   const filtered = [];
+  const seenKeys = new Set();
   for (const line of lines) {
     if (/^\[?screen/i.test(line)) continue;
     if (/^ln\s*\d+/i.test(line)) continue;
     if (/^col\s*\d+/i.test(line)) continue;
     if (/^{/.test(line)) continue;
+    const key = line.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (!key) continue;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
     filtered.push(line);
   }
   return filtered.join("\n");
@@ -1089,14 +1098,6 @@ function handleStreamError(payload) {
   }
 
 }
-
-
-
-
-
-
-
-
 
 // De-dupe helper to avoid double lines (from IPC + companion overlap)
 
@@ -1750,6 +1751,15 @@ on(screenReadBtn, "click", async () => {
   screenReadBtn.classList.add("active");
   setState("screen: capturing...");
 
+  // Reset transcript/chat so previous runs don't linger
+  lastScreenReadContext = "";
+  if (liveTranscript) {
+    liveTranscript.value = "";
+  }
+  if (chatInput) {
+    chatInput.value = "";
+  }
+
   console.log("[screen] capture requested");
 
   // Minimize for region selection
@@ -1758,31 +1768,43 @@ on(screenReadBtn, "click", async () => {
   // const regionRaw = await selectScreenRegion();
   // window.windowCtl?.restore();
 
-  let shouldRestore = false;
+  //---------------------------------------------
+// REGION SELECTION (with macOS capture fixes)
+//---------------------------------------------
+//---------------------------------------------
+// REGION SELECTION (FINAL MACOS FIXED VERSION)
+//---------------------------------------------
+let shouldRestore = false;
 
-  // 1) Minimize window before region selection
-  if (window.windowCtl?.minimize) {
-    window.windowCtl.minimize();
+// 1) Allow macOS overlay system to initialize
+await new Promise(r => setTimeout(r, 120));
+
+// 2) Minimize Haloryn window
+if (window.windowCtl?.minimize) {
+  try {
+    await window.windowCtl.minimize();
+    await window.windowCtl.awaitMinimize();  // ⭐ wait for actual minimize event
     shouldRestore = true;
+  } catch (err) {
+    console.debug("[screen] minimize failed:", err);
   }
+}
 
-  // 2) Let user select the region
-  const regionRaw = await selectScreenRegion();
+// 3) Show region selector
+const regionRaw = await selectScreenRegion();
 
-  // 3) If user cancels, restore immediately and bail out
-  if (!regionRaw) {
-    appendLog("[screen] region not configured");
-    if (shouldRestore) window.windowCtl?.restore();
-    cleanupScreenRead();
-    return;
-  }
+// 4) If canceled → restore & exit
+if (!regionRaw || !regionRaw.width || !regionRaw.height) {
+  appendLog("[screen] region not configured");
+  if (shouldRestore) window.windowCtl?.restore();
+  cleanupScreenRead();
+  return;
+}
 
-  // 4) Schedule restore slightly later so capture runs while window is hidden
-  if (shouldRestore) {
-    setTimeout(() => {
-      try { window.windowCtl?.restore(); } catch {}
-    }, 250);
-  }
+// 5) Allow compositor to settle before capturing
+await new Promise((res) => setTimeout(res, 200));
+
+
 
 
   // ---------------- PATCH C: SCALE REGION ----------------
@@ -1797,22 +1819,29 @@ on(screenReadBtn, "click", async () => {
   console.log("[screen] FINAL SCALED REGION:", region);
   // -------------------------------------------------------
 
-  // Restore window BEFORE capture
-  window.windowCtl?.restore();
-  await new Promise(r => setTimeout(r, 150));
-
   try {
-    setCaptureClean(true);
-    console.log("[overlay selection] region:", region);
+  setCaptureClean(true);
 
-    // -------------------- SCREEN CAPTURE --------------------
-    const res = await window.electronAPI.captureScreenBelow(region);
-    console.log("[screen] capture response", res);
+  // Keep out of transcript / Answer UI
+  console.debug("[overlay selection] region:", region);
 
-    if (!res?.ok) {
-      appendLog("[screen] capture failed: " + (res?.error || "no data"));
-      return;
-    }
+  // -------------------- SCREEN CAPTURE --------------------
+  await new Promise(res => setTimeout(res, 180));
+  const res = await window.electronAPI.captureScreenBelow(region);
+
+  if (shouldRestore) {
+    window.windowCtl?.restore();
+    await new Promise((r) => setTimeout(r, 120));
+  }
+
+  // Keep out of transcript / Answer UI
+  console.debug("[screen] capture response", res);
+
+  if (!res?.ok) {
+    appendLog("[screen] capture failed: " + (res?.error || "no data"));
+    return;
+  }
+
 
     if (!res.base64 || res.base64.length < 10) {
       appendLog("[screen] invalid or empty capture — skipping OCR");
@@ -2074,14 +2103,19 @@ async function processOcrText(textRaw) {
       return;
     }
 
-    // Append to transcript textarea
+    if (normalized === lastScreenReadContext) {
+      console.log("[screen] OCR text identical to previous run, skipping duplicate append");
+      return;
+    }
+    lastScreenReadContext = normalized;
+
+    // Replace transcript textarea with current capture
     if (liveTranscript) {
-      const existing = (liveTranscript.value || "").trim();
-      liveTranscript.value = (existing ? existing + "\n\n" : "") + normalized;
+      liveTranscript.value = normalized;
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
-    // Push into chat input
+    // Push into chat input as the new prompt
     if (chatInput) {
       chatInput.value = normalized;
       chatInput.focus();
