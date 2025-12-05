@@ -8,6 +8,12 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
+let autoUpdater = null;
+try {
+  autoUpdater = require("electron-updater").autoUpdater;
+} catch (err) {
+  console.warn("[autoUpdate] electron-updater unavailable:", err.message);
+}
 
 // Try multiple .env locations so packaged builds still pick up secrets
 const envPaths = [];
@@ -30,7 +36,8 @@ const {
   Tray,
   nativeImage,
   screen,
-  desktopCapturer
+  desktopCapturer,
+  systemPreferences
 } = require("electron");
 require("./ipc/licenseIPC");
 const { initTranscription, transcribeAudio } = require("./transcriptionManager");
@@ -385,11 +392,15 @@ async function tryFastLocalTranscribe(filePath) {
 }
 
 
-process.env.PATH = [
-  'C:\\Program Files\\sox',
-  'C:\\Program Files (x86)\\sox-14-4-2',
-  process.env.PATH || ''
-].join(';');
+// Only prepend Windows-specific SoX paths on Windows; keep POSIX PATH untouched.
+if (process.platform === 'win32') {
+  const soxCandidates = [
+    'C:\\Program Files\\sox',
+    'C:\\Program Files (x86)\\sox-14-4-2'
+  ];
+  const existingPath = process.env.PATH || '';
+  process.env.PATH = [...soxCandidates, existingPath].filter(Boolean).join(path.delimiter);
+}
 /*
   © 2025 iMSK Consultants LLC — Haloryn AI
   All Rights Reserved.
@@ -562,6 +573,126 @@ function send(ch, payload) {
   if (win && !win.isDestroyed()) {
     try { win.webContents.send(ch, payload); } catch {}
   }
+}
+
+async function ensureMicrophonePermission() {
+  // macOS supports explicit prompts; other platforms rely on system dialogs when the recorder launches
+  if (process.platform === 'darwin' && systemPreferences) {
+    const canCheck = typeof systemPreferences.getMediaAccessStatus === 'function';
+    const canRequest = typeof systemPreferences.askForMediaAccess === 'function';
+
+    if (!canCheck || !canRequest) {
+      return { granted: true };
+    }
+
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    if (status === 'granted') return { granted: true };
+
+    try {
+      send('log', '[mic] requesting macOS microphone access');
+      const granted = await systemPreferences.askForMediaAccess('microphone');
+      if (!granted) {
+        const detail = 'Haloryn needs microphone access. Grant it via System Settings → Privacy & Security → Microphone.';
+        dialog.showMessageBox({
+          type: 'warning',
+          message: 'Microphone permission required',
+          detail,
+          buttons: ['OK']
+        });
+        return { granted: false, error: detail };
+      }
+      return { granted: true };
+    } catch (err) {
+      send('log', `[mic] request failed: ${err.message}`);
+      return { granted: false, error: err.message };
+    }
+  }
+
+  // For Windows/Linux we rely on OS prompts presented when recording starts
+  return { granted: true };
+}
+
+function initAutoUpdater() {
+  if (!autoUpdater) {
+    console.warn("[autoUpdate] module missing; skipping updater init.");
+    return;
+  }
+  if (!app.isPackaged) {
+    send('log', '[autoUpdate] dev build detected; auto-update disabled.');
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  const feedUrl = (process.env.AUTO_UPDATE_URL || process.env.HALORYN_UPDATE_URL || '').trim();
+  if (feedUrl) {
+    try {
+      autoUpdater.setFeedURL({ url: feedUrl });
+      send('log', `[autoUpdate] Custom feed set: ${feedUrl}`);
+    } catch (err) {
+      send('log', `[autoUpdate] Failed to set custom feed: ${err.message}`);
+    }
+  }
+
+  autoUpdater.on('error', (err) => {
+    send('log', `[autoUpdate:error] ${err?.message || err}`);
+  });
+
+  autoUpdater.on('checking-for-update', () => {
+    send('log', '[autoUpdate] Checking for updates...');
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    send('log', '[autoUpdate] No updates found (stable channel).');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    const message = `Version ${info?.version || ''} is available. You are on ${app.getVersion()}.`;
+    send('log', `[autoUpdate] Update available: ${info?.version || 'unknown'}`);
+    const parent = win && !win.isDestroyed() ? win : undefined;
+    dialog.showMessageBox(parent, {
+      type: 'info',
+      buttons: ['Download', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update available',
+      message: 'A new Haloryn build is ready.',
+      detail: `${message}\nDownload now?`
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.downloadUpdate().catch((err) => {
+          send('log', `[autoUpdate] download failed: ${err.message}`);
+        });
+      }
+    }).catch(() => {});
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    send('log', `[autoUpdate] Update downloaded: ${info?.version || 'unknown'}`);
+    const parent = win && !win.isDestroyed() ? win : undefined;
+    dialog.showMessageBox(parent, {
+      type: 'question',
+      buttons: ['Restart & Install', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update ready',
+      message: 'Haloryn update downloaded',
+      detail: 'Restart now to install the latest stable build?'
+    }).then(({ response }) => {
+      if (response === 0) {
+        setImmediate(() => {
+          autoUpdater.quitAndInstall();
+        });
+      }
+    }).catch(() => {});
+  });
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      send('log', `[autoUpdate] initial check failed: ${err.message}`);
+    });
+  }, 4000);
 }
 app.setAppUserModelId("Haloryn");
 safeChdir(__dirname);
@@ -765,6 +896,7 @@ function initSearchEngines() {
 app.whenReady().then(() => {
   initSearchEngines(); // NEW: wire Brave on boot
   createWindow();
+  initAutoUpdater();
   try {
     globalShortcut.register('CommandOrControl+Shift+Space', () => {
       if (!win) return;
@@ -1690,6 +1822,29 @@ function stopCompanionTimer(){
   if (companion.timer) { clearInterval(companion.timer); companion.timer = null; }
 }
 
+async function transcribeChunkGroqFirst(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      send('log', `[live] chunk missing: ${filePath}`);
+      return '';
+    }
+    const audioBuffer = await fs.promises.readFile(filePath);
+    if (!audioBuffer?.length) {
+      send('log', `[live] chunk empty: ${filePath}`);
+      return '';
+    }
+
+    send('log', `[live] transcribing chunk (${audioBuffer.length} bytes) via Groq hybrid`);
+    const result = await transcribeAudio(audioBuffer);
+    const text = result?.sanitized?.trim() || result?.raw?.trim() || '';
+    send('log', `[live] transcription source=${result?.source || 'unknown'} chars=${text.length}`);
+    return text;
+  } catch (err) {
+    send('log', `[live] Groq transcribe error: ${err.message}`);
+    return '';
+  }
+}
+
 function startChunk(){
   const dMs=recConfig.chunkMs||1500;
   const thisIdx = live.idx;
@@ -1702,7 +1857,7 @@ function startChunk(){
 
     (async()=>{
       try{
-        const text=(await runWhisper(outfile))||'';
+        const text = (await transcribeChunkGroqFirst(outfile)) || '';
         const normalized = text.replace(/\s+/g,' ').trim();
         if(normalized){
           send('live:chunk', normalized);
@@ -1727,8 +1882,8 @@ function startChunk(){
               pendingAnswerTimer = null;
             }
           }, 2000); // wait for ~2s of silence before answering
-        } else send('log','[whisper] (empty transcript)');
-      }catch(e){ send('log', `[whisper:error] ${e.message}`); }
+        } else send('log','[live] (empty transcript)');
+      }catch(e){ send('log', `[live transcribe error] ${e.message}`); }
     })();
   };
   recordWithSox(outfile,dMs,after, recConfig.device, recConfig.gainDb);
@@ -1823,6 +1978,13 @@ ipcMain.handle("logout:clear", async () => {
 
 // Mirror handlers for Companion overlay API (used by preload.js)
 ipcMain.handle('companion:start', async()=>{
+  const mic = await ensureMicrophonePermission();
+  if (!mic.granted) {
+    const msg = mic.error || 'Microphone permission denied. Enable access in system settings and try again.';
+    send('companion:state','off');
+    send('live:answer', msg);
+    return { ok:false, error: msg };
+  }
   if(live.on){ send('companion:state','on'); return {ok:true}; }
   live={on:true, idx:0, transcript:''};
   companion.lastLen = 0;
@@ -1842,6 +2004,13 @@ ipcMain.handle('companion:stop', async()=>{
   return {ok:true};
 });
 ipcMain.handle('live:start', async()=>{
+  const mic = await ensureMicrophonePermission();
+  if (!mic.granted) {
+    const msg = mic.error || 'Microphone permission denied. Enable access in system settings and try again.';
+    send('companion:state','off');
+    send('live:answer', msg);
+    return { ok:false, error: msg };
+  }
   if(live.on) return {ok:true};
   live={on:true, idx:0, transcript:''};
   companion.lastLen = 0;

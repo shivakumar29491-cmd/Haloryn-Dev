@@ -18,10 +18,11 @@
     "screenshot-desktop": "^1.15.3",
     "sharp": "^0.34.5",
     "tesseract.js": "^2.1.4",
-    "tesseract.js-core": "^2.2.0"
+    "tesseract.js-core": "^2.2.0",
+    "electron-updater": "^6.3.0"
   },
   "devDependencies": {
-    "electron": "^30.0.0",
+    "electron": "^30.5.1",
     "electron-builder": "24.13.3"
   },
   "build": {
@@ -34,7 +35,13 @@
       "electron/**/*",
       "!**/*.map"
     ],
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "shivakumar29491-cmd",
+        "repo": "Haloryn-Main"
+      }
+    ],
     "asar": true,
     "compression": "maximum",
     "win": {
