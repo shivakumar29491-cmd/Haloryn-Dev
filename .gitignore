@@ -20,10 +20,29 @@ yarn-error.log*
 logs/
 *.log
 
-# Environment files
+# Env
 .env
 
 
-electron/tessdata/
-electron/eng.traineddata
-.env
+
+###############################################
+# 🔥 NEW ADDITIONS (DO NOT REMOVE OLD LINES) 🔥
+###############################################
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Native addon build output (generated files)
+native-macos-capture/build/
+native-macos-capture/build/**
+
+# Prevent committing compiled native binaries
+*.node
+
+# Tesseract build cache (optional but safe)
+tessdata/
+*.traineddata
+
+# Prevent accidental inclusion of test images in addon folder
+native-macos-capture/*.png
