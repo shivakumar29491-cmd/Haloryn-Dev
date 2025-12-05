@@ -1,5 +1,4 @@
-// electron/api/search/router.js
-// Unified Search Router — Electron Version (CommonJS)
+// ===== Unified Search Router (Electron backend) =====
 
 const fetch = require("node-fetch");
 const { getProviderOrder } = require("../utils/providerSelector");

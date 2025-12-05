@@ -1,3 +1,4 @@
+// ===== Region tool preload bridge =====
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("regionToolAPI", {

@@ -1,5 +1,5 @@
-// whisperLocal.js
-// Wrapper around whisper.cpp (or any local Whisper build) for offline STT fallback
+// ===== Whisper Local Wrapper =====
+// Wraps whisper.cpp (or any local Whisper build) for offline STT fallback
 
 const fs = require("fs");
 const os = require("os");
@@ -8,6 +8,7 @@ const { randomUUID } = require("crypto");
 const { spawn } = require("child_process");
 const fetch = require("node-fetch");
 
+// ===== Configuration =====
 const WHISPER_BIN =
   process.env.WHISPER_BIN ||
   (process.platform === "win32"
@@ -23,6 +24,7 @@ const WHISPER_LANG = process.env.WHISPER_LANG || "en";
 const WHISPER_NGL = process.env.WHISPER_NGL ? String(process.env.WHISPER_NGL) : null;
 const FAST_TRANSCRIBE_URL = process.env.FAST_TRANSCRIBE_URL || "";
 
+// ===== Optional fast local service =====
 async function tryFastLocalTranscribe(audioBuffer) {
   if (!FAST_TRANSCRIBE_URL || !audioBuffer?.length) return null;
   try {
@@ -42,6 +44,7 @@ async function tryFastLocalTranscribe(audioBuffer) {
   }
 }
 
+// ===== Whisper.cpp invocation =====
 async function runWhisperCpp(audioBuffer) {
   if (!audioBuffer || !audioBuffer.length) return "";
 

@@ -1,4 +1,4 @@
-// api/search/braveApi.js
+// ===== Brave Search API handler =====
 const fetch = require("node-fetch");
 const { normalizeSearchResults } = require("../utils/formatter");
 

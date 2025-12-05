@@ -1,7 +1,5 @@
-// -----------------------------------------------------------
-//  groqEngine.js – LLM Answer Engine (ROOT FOLDER)
-//  Phase 8 – use Haloryn Backend (Vercel)
-// -----------------------------------------------------------
+// ===== Groq Engine =====
+// LLM answer engine + transcription helpers
 
 const fetch = require("node-fetch");
 const Groq = require("groq-sdk");
@@ -21,9 +19,7 @@ function getGroqClient() {
   return groqClient;
 }
 
-// -----------------------------------------------------------
-// 1. GROQ WHISPER TRANSCRIPTION (via direct Groq API)
-// -----------------------------------------------------------
+// ===== Groq Whisper transcription =====
 async function groqWhisperTranscribe(audioBuffer) {
   const groq = getGroqClient();
   if (!groq) return "";
@@ -45,9 +41,7 @@ async function groqWhisperTranscribe(audioBuffer) {
   }
 }
 
-// -----------------------------------------------------------
-// 2. FAST ANSWER – USE Haloryn BACKEND (NOT GROQ DIRECT)
-// -----------------------------------------------------------
+// ===== Fast Groq answers =====
 async function groqFastAnswer(prompt, docContextText = "", docName = "", opts = {}) {
   const groq = getGroqClient();
   if (!groq) return "";
@@ -114,9 +108,6 @@ async function groqFastAnswer(prompt, docContextText = "", docName = "", opts = 
   }
 }
 
-// -----------------------------------------------------------
-// EXPORTS
-// -----------------------------------------------------------
 module.exports = {
   groqWhisperTranscribe,
   groqFastAnswer

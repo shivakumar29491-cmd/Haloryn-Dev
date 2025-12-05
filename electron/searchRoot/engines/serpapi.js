@@ -1,5 +1,4 @@
-// search/engines/serpapi.js
-// SerpAPI wrapper returning normalized results
+// ===== SerpAPI wrapper =====
 
 const fetch = require('node-fetch');
 
@@ -32,4 +31,3 @@ async function serpapiSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
 }
 
 module.exports = { serpapiSearch };
-

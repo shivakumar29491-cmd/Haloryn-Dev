@@ -1,4 +1,4 @@
-// searchRoot/searchRouter.js
+// ===== SearchRoot router =====
 // Engine selector + result normalizer (Brave -> Bing -> Google PSE)
 
 const fetch = require("node-fetch");

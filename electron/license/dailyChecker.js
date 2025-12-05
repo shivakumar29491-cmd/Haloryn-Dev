@@ -1,3 +1,4 @@
+// ===== Daily license checker =====
 const { checkLicense } = require("./licenseManager");
 
 function startDailyCheck(mainWindow) {
@@ -11,4 +12,3 @@ function startDailyCheck(mainWindow) {
 }
 
 module.exports = { startDailyCheck };
-

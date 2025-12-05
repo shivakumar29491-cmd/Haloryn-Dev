@@ -1,6 +1,5 @@
-// transcriptionEngine.js
-// Groq Whisper-large-v3-turbo Streaming Engine
-// Handles fast cloud STT for Companion Mode
+// ===== Transcription Engine =====
+// Groq Whisper-large-v3-turbo streaming engine for fast cloud STT
 
 const fs = require("fs");
 const os = require("os");
@@ -16,11 +15,7 @@ class TranscriptionEngine {
     this.groq = new Groq({ apiKey });
   }
 
-  /**
-   * Transcribe a WAV/PCM buffer through Groq Whisper
-   * @param {Buffer} audioBuffer
-   * @returns {Promise<string>} transcript
-   */
+  // ===== Single buffer transcription =====
   async transcribeBuffer(audioBuffer) {
     if (!audioBuffer || !audioBuffer.length) return "";
 
@@ -49,10 +44,7 @@ class TranscriptionEngine {
     }
   }
 
-  /**
-   * (Optional future): Real-time streaming interface
-   * This is for ultra-low-latency Companion mode
-   */
+  // ===== Streaming transcription (future hook) =====
   async transcribeStream(audioBuffer, onPartial, onFinal) {
     if (!audioBuffer || !audioBuffer.length) return null;
 

@@ -1,3 +1,4 @@
+// ===== Tesseract worker bootstrap =====
 // Custom wrapper to disable global fetch before tesseract worker boots
 try {
   if (typeof global.fetch !== 'undefined') {

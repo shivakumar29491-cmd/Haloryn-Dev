@@ -1,5 +1,4 @@
-// electron/api/utils/formatter.js
-// Phase 10 — Shared formatting utilities
+// ===== Formatter Utilities (Phase 10) =====
 
 module.exports = {
   cleanText,

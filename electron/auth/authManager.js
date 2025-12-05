@@ -19,6 +19,8 @@ import { doc, setDoc } from "firebase/firestore";
 import { sendPhoneOTP } from "./phoneOtp.js";
 import { sendEmailOTP, verifyEmailOTP } from "./emailOtp.js";
 
+// ===== Manual registration/login =====
+
 export async function registerManual(user, sendTo) {
   const cred = await createUserWithEmailAndPassword(auth, user.email, user.password);
 
@@ -44,6 +46,7 @@ export async function loginManual(email, password, sendTo, phone) {
     : sendEmailOTP(email);
 }
 
+// ===== OAuth flows =====
 export async function loginGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
@@ -73,6 +76,7 @@ export async function loginFacebookRedirect() {
   await signInWithRedirect(auth, provider);
 }
 
+// ===== OTP verification & sign-out =====
 export async function verifyOtpFlow(type, payload) {
   if (type === "email") {
     return verifyEmailOTP(payload.email, payload.code);

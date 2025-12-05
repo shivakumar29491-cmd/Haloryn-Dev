@@ -1,15 +1,7 @@
-// =====================================================
-// Haloryn — main.js (Recorder + Whisper + Chat + Doc QA + Live Companion)
-// Phase 5.11–5.15 updates included + Brave API wiring
-// =====================================================
-/*
-  © 2025 iMSK Consultants LLC — Haloryn AI
-  All Rights Reserved.
-*/
+// ===== Haloryn Main Process =====
+// Recorder + Whisper + Chat + Doc QA + Live Companion
 
-// =====================================================
-// IMPORTS + ENV SETUP (CLEAN + NO DUPLICATES)
-// =====================================================
+// ===== Imports & Environment Setup =====
 
 const fs = require("fs");
 const path = require("path");
@@ -28,8 +20,6 @@ for (const envPath of envPaths) {
     break;
   }
 }
-console.log(">>> USING THIS MAIN.JS <<<");
-
 const {
   app,
   BrowserWindow,
@@ -48,7 +38,7 @@ const { initTranscription, transcribeAudio } = require("./transcriptionManager")
 global.IS_PACKAGED = app.isPackaged;
 
 // Minimal debug logger guard (no console output by default).
-const debugLog = () => {};
+const debugLog = (..._args) => {};
 
 function safeChdir(dir) {
   try {
@@ -61,6 +51,7 @@ function safeChdir(dir) {
   }
 }
 
+// ===== Screen Region Storage =====
 const SCREEN_REGION_FILE = path.join(app.getPath("userData"), "screen-region.enc");
 const SCREEN_REGION_KEY = crypto
   .createHash("sha256")
@@ -132,6 +123,7 @@ function normalizeAudioBuffer(payload) {
   return null;
 }
 
+// ===== Screen Region IPC =====
 ipcMain.handle("screenread:get-region", () => {
   return { ok: true, region: loadStoredRegion() };
 });
@@ -154,122 +146,7 @@ ipcMain.handle("screenread:launch-app", (_e, command) => {
   }
 });
 
-/* [SNIP OVERLAY DISABLED -- original implementation retained for reference]
-let screenOverlayWindow = null;
-let screenOverlayPending = null;
-
-function finalizeScreenOverlay(result) {
-  if (!screenOverlayPending) return;
-  const resolver = screenOverlayPending.resolve;
-  screenOverlayPending = null;
-  if (resolver) resolver(result);
-}
-const sharp = require("sharp");
-
-async function normalizeMacImage(base64) {
-  const buffer = Buffer.from(base64, "base64");
-
-  // Get metadata
-  const meta = await sharp(buffer).metadata();
-
-  // macOS Retina = usually density 144 → scale down by 0.5
-  const scale = meta.density && meta.density > 110 ? 0.5 : 1;
-
-  return sharp(buffer)
-    .resize({
-      width: Math.round(meta.width * scale),
-      height: Math.round(meta.height * scale)
-    })
-    .png()
-    .toBuffer();
-}
-
-ipcMain.on("screenread:selection", (_event, region) => {
-  console.log("[screenread] selection received", region);
-  finalizeScreenOverlay({ ok: true, region });
-});
-
-ipcMain.on("screenread:selection-cancel", () => {
-  console.log("[screenread] selection canceled");
-  finalizeScreenOverlay({ ok: false, error: "canceled" });
-});
-ipcMain.handle("window:await-minimized", async () => {
-  return new Promise(resolve => {
-    if (mainWindow.isMinimized()) return resolve(true);
-    mainWindow.once("minimize", () => resolve(true));
-  });
-});
-
-ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
-  if (screenOverlayPending) {
-    return { ok: false, error: "overlay busy" };
-  }
-
-  const target = BrowserWindow.getFocusedWindow() || win;
-  const anchorBounds = target && !target.isDestroyed() ? target.getBounds() : { x: 0, y: 0 };
-  const display =
-    screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y }) || screen.getPrimaryDisplay();
-
-  console.log("[screenread] overlay request", { displayId: display?.id, initialRegion });
-
-  screenOverlayWindow = new BrowserWindow({
-  x: display.bounds.x,
-  y: display.bounds.y,
-  width: display.bounds.width,
-  height: display.bounds.height,
-  frame: false,
-  transparent: true,
-  backgroundColor: '#00000000',
-  hasShadow: false,
-  resizable: false,
-  movable: false,
-  fullscreenable: false,
-  skipTaskbar: true,
-  alwaysOnTop: true,
-  focusable: true,
-  vibrancy: null,
-  visualEffectState: 'inactive',
-  webPreferences: {
-    nodeIntegration: true,
-    contextIsolation: false,
-    backgroundThrottling: false
-  }
-});
-
-  screenOverlayWindow.setMenuBarVisibility(false);
-  screenOverlayWindow.setAlwaysOnTop(true, "screen-saver");
-
-  screenOverlayPending = {
-    resolve: null
-  };
-
-  const promise = new Promise((resolve) => {
-    screenOverlayPending.resolve = resolve;
-  });
-
-  screenOverlayWindow.on("closed", () => {
-    screenOverlayWindow = null;
-    if (screenOverlayPending) {
-      const closeResolver = screenOverlayPending.resolve;
-      screenOverlayPending = null;
-      if (closeResolver) closeResolver({ ok: false, error: "overlay closed" });
-    }
-  });
-
-  await screenOverlayWindow.loadFile(path.join(__dirname, "snipOverlay.html"));
-
-  screenOverlayWindow.once("ready-to-show", () => {
-    if (screenOverlayWindow) {
-      screenOverlayWindow.show();
-      screenOverlayWindow.focus();
-    }
-  });
-
-  return promise;
-});
-*/
-
-// [REGION TOOL OVERLAY] replaces the legacy snip overlay implementation
+// ===== Region Tool Overlay =====
 let regionToolWindow = null;
 let regionToolPending = null;
 let regionToolDisplayBounds = null;
@@ -678,9 +555,8 @@ ipcMain.handle("load-activity", async () => {
 });
 
 
-// ---------------- Window ----------------
+// ===== Window Management =====
 let win;
-
 
 function send(ch, payload) {
   if (win && !win.isDestroyed()) {
@@ -899,7 +775,7 @@ app.whenReady().then(() => {
 app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch {} });
 app.on('window-all-closed', () => app.quit());
 
-// ---------------- Whisper (tuned for speed) ----------------
+// ===== Whisper (tuned for speed) =====
 const WHISPER_BIN     = process.env.WHISPER_BIN     || 'C:\\dev\\whisper.cpp\\build\\bin\\Release\\whisper-cli.exe';
 const WHISPER_MODEL   = process.env.WHISPER_MODEL   || 'C:\\dev\\whisper.cpp\\models\\ggml-tiny.en.bin'; // fastest sensible default
 // Fewer threads by default to reduce CPU spikes on live/companion
@@ -963,7 +839,7 @@ async function runWhisper(filePath){
   });
 }
 
-// ---------------- Web utils (legacy DuckDuckGo helpers, backup only) ----------------
+// ===== Web utils (legacy DuckDuckGo helpers, backup only) =====
 async function duckDuckGoSearch(query, maxResults = 5) {
   const q = encodeURIComponent(query);
   const url = `https://html.duckduckgo.com/html/?q=${q}`;
@@ -1026,7 +902,7 @@ function extractiveSummary(text, query, maxSentences = 6) {
   return chosen.length ? chosen.join(' ') : sents.slice(0, maxSentences).join(' ').trim();
 }
 
-// ---------------- Answering state/funcs ----------------
+// ===== Answering state/funcs =====
 let docContext = { name:'', text:'', tokens:null };
 let webPlus   = false;   // backend flag (UI removed)
 let useDoc    = false;   // default OFF so answers are AI-only
@@ -1325,11 +1201,7 @@ Write one cohesive answer. If you use web info, reflect it clearly.`;
   } catch (err) {
     send("log", `[OpenAI Exception] ${err.message}`);
   }
-
-  // --------------------
   // CLOUD FALLBACK
-  // --------------------
-
   // Brave summary
   try {
     const brave = await braveWebSummary(question, 5);
@@ -1368,10 +1240,7 @@ Write one cohesive answer. If you use web info, reflect it clearly.`;
 // Phase 5.12 — Doc-enrichment mode: doc-first then web
 async function docEnrichAnswer(question, text) {
   const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
-
-  // -------------------------------
   // PHASE A: DOC-FIRST (OpenAI only)
-  // -------------------------------
   let docPart = '';
 
   if (hasOpenAIKey) {
@@ -1381,10 +1250,7 @@ async function docEnrichAnswer(question, text) {
     const summary = extractiveSummary(text, question, 6);
     docPart = summary || `I couldn't find this in the document.`;
   }
-
-  // -------------------------------
   // PHASE B: WEB ENRICHMENT
-  // -------------------------------
   const results = await cachedSmartSearch(question, {
     maxResults: 4,
     log: (line) => send("log", line)
@@ -1399,11 +1265,8 @@ async function docEnrichAnswer(question, text) {
   }
 
   const webPart = extractiveSummary(webCtx, question, 6);
-
-  // -------------------------------
   // PHASE C: HYBRID FALLBACK
   // If doc lacks answer AND web lacks answer
-  // -------------------------------
   const docEmpty =
     !docPart ||
     /couldn'?t find this in the document/i.test(docPart);
@@ -1419,10 +1282,7 @@ async function docEnrichAnswer(question, text) {
 
     return `I couldn't find enough information in the document or the web to answer this.`;
   }
-
-  // -------------------------------
   // PHASE D: COMBINE DOC + WEB
-  // -------------------------------
   let out = "";
 
   if (docPart) {
@@ -1550,15 +1410,12 @@ async function genericAnswer(userText){
 
 
 // --- Router ---
-// ---------------- CLOUD-ONLY ROUTER (Phase 8) ----------------
+// ===== CLOUD-ONLY ROUTER (Phase 8) =====
 async function answer(userText) {
   const q = (userText || '').trim();
 
   if (!q) return '';
-
-  // --------------------------------------
   // 0) DOC CONTEXT (if attached + enabled)
-  // --------------------------------------
   if (useDoc && docContext.text) {
     try {
       // Try a doc-focused Groq answer first (doc context + question)
@@ -1594,10 +1451,7 @@ async function answer(userText) {
     const summary = extractiveSummary(docContext.text, q, 6);
     if (summary && summary.trim()) return summary.trim();
   }
-
-  // --------------------------------------
   // 1) GROQ FAST ANSWER (PRIMARY ENGINE)
-  // --------------------------------------
   try {
     const fast = await groqFastAnswer(q);
 
@@ -1611,10 +1465,7 @@ async function answer(userText) {
   } catch (err) {
     send("log", `[Groq fast error] ${err.message}`);
   }
-
-  // --------------------------------------
   // 2) BRAVE FALLBACK (SECOND)
-  // --------------------------------------
   try {
     const brave = await braveWebSummary(q, 5);
 
@@ -1625,10 +1476,7 @@ async function answer(userText) {
   } catch (err) {
     send("log", `[Brave error] ${err.message}`);
   }
-
-  // --------------------------------------
   // 3) ROUTED WEB SEARCH (THIRD FALLBACK)
-  // --------------------------------------
   try {
     const results = await cachedSmartSearch(q, {
       maxResults: 5,
@@ -1653,10 +1501,7 @@ async function answer(userText) {
   } catch (err) {
     send("log", `[Router error] ${err.message}`);
   }
-
-  // --------------------------------------
   // 4) OPENAI FINAL RESCUE FALLBACK
-  // --------------------------------------
   if (process.env.OPENAI_API_KEY) {
     try {
       send("log", "[OpenAI] Using final fallback.");
@@ -1691,16 +1536,13 @@ async function answer(userText) {
       send("log", `[OpenAI fallback error] ${err.message}`);
     }
   }
-
-  // --------------------------------------
   // 5) ABSOLUTE LAST RETURN
-  // --------------------------------------
   return `I couldn't find information for "${q}".`;
 }
 
 
 
-// --------------- Live / question classifiers (5.13) ---------------
+// ===== Live / question classifiers (5.13) =====
 function isQuestion(text) {
   const s = String(text || '');
   return /(\?|^\s*(who|what|why|when|where|which|how|can|could|should|would)\b|please\b)/i.test(s);
@@ -1726,7 +1568,7 @@ async function answerLiveQuestion(text) {
   return await answer(payload);
 }
 
-// ---------------- Paths / Recorder ----------------
+// ===== Paths / Recorder =====
 function tmpDir(){
   const dir=path.join(os.tmpdir(),'haloai');
   if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true});
@@ -1758,7 +1600,7 @@ function recordWithSox(outfile, ms, onDone, device = 'default', gainDb = '0'){
   }
 }
 
-// ---------------- Live + Companion pipeline ----------------
+// ===== Live + Companion pipeline =====
 let live={on:false, idx:0, transcript:''};
 let pendingAnswerTimer = null;
 let pendingAnswerCtx = '';
@@ -2048,9 +1890,7 @@ ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
   }
 });*/
 
-// ------------------ OCR (Native Tesseract CLI) ------------------
-
-console.log("[DEBUG] process.platform =", process.platform);
+// ===== OCR (Native Tesseract CLI) =====
 
 //const { spawn } = require("child_process");
 //const os = require("os");
@@ -2088,11 +1928,6 @@ ipcMain.handle("ocr:validate", async (_event, payload) => {
 
 ipcMain.handle("ocr:image", async (_event, payload) => {
   try {
-    console.log("[OCR] Received payload for native Tesseract");
-
-    //-------------------------------------------------------
-    // 1. Normalize incoming image buffer
-    //-------------------------------------------------------
     let imgBuffer = null;
 
     if (Buffer.isBuffer(payload)) {
@@ -2111,47 +1946,30 @@ ipcMain.handle("ocr:image", async (_event, payload) => {
       return "OCR Error: Invalid OCR payload";
     }
 
-    //-------------------------------------------------------
-    // 2. Write temp PNG file
-    //-------------------------------------------------------
     const tempFile = path.join(os.tmpdir(), `ocr_${Date.now()}.png`);
-    // macOS Retina fix — downscale 2× images
-let finalBuffer = imgBuffer;
+    let finalBuffer = imgBuffer;
 
-if (process.platform === "darwin") {
-  try {
-    finalBuffer = await sharp(imgBuffer)
-      .resize({ 
-        width: Math.round((await sharp(imgBuffer).metadata()).width / 2),
-        height: Math.round((await sharp(imgBuffer).metadata()).height / 2)
-      })
-      .png()
-      .toBuffer();
-    console.log("[OCR] Retina image downscaled");
-  } catch (e) {
-    console.warn("[OCR] Failed to downscale Retina image:", e.message);
-  }
-}
+    if (process.platform === "darwin") {
+      try {
+        finalBuffer = await sharp(imgBuffer)
+          .resize({
+            width: Math.round((await sharp(imgBuffer).metadata()).width / 2),
+            height: Math.round((await sharp(imgBuffer).metadata()).height / 2)
+          })
+          .png()
+          .toBuffer();
+      } catch (e) {
+        console.warn("[OCR] Failed to downscale Retina image:", e.message);
+      }
+    }
 
-fs.writeFileSync(tempFile, finalBuffer);
+    fs.writeFileSync(tempFile, finalBuffer);
 
-    console.log("[OCR] Temp image created:", tempFile);
-
-    //-------------------------------------------------------
-    // 3. Identify Tesseract binary per OS
-    //-------------------------------------------------------
     let tesseractBin = "/usr/local/bin/tesseract";
- // macOS default
-
     if (process.platform === "win32") {
       tesseractBin = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
     }
 
-    console.log("[OCR] Using binary:", tesseractBin);
-
-    //-------------------------------------------------------
-    // 4. Run Tesseract via spawn
-    //-------------------------------------------------------
     const args = [tempFile, "stdout", "-l", "eng"];
     const proc = spawn(tesseractBin, args);
 
@@ -2165,9 +1983,6 @@ fs.writeFileSync(tempFile, finalBuffer);
       proc.on("close", resolve);
     });
 
-    console.log("[OCR] Tesseract exited with code:", exitCode);
-
-    // Cleanup temp file
     fs.unlink(tempFile, () => {});
 
     if (exitCode !== 0) {
@@ -2176,10 +1991,7 @@ fs.writeFileSync(tempFile, finalBuffer);
     }
 
     const text = (stdout || "").trim();
-    console.log("[OCR] Text length:", text.length);
-
     return text;
-
   } catch (err) {
     console.error("[OCR] Exception:", err);
     return "OCR Error: " + (err?.message || err);
@@ -2192,7 +2004,7 @@ fs.writeFileSync(tempFile, finalBuffer);
 
 
 
-// ---------------- File mode ----------------
+// ===== File mode =====
 ipcMain.handle('pick:audio', async()=>{
   const {canceled,filePaths}=await dialog.showOpenDialog({
     properties:['openFile'],
@@ -2205,7 +2017,7 @@ ipcMain.handle('whisper:transcribe', async(_e, p)=>{
   catch(e){ send('log', `[error] ${e.message}`); return {code:-1, output:''}; }
 });
 
-// ---------------- Config ----------------
+// ===== Config =====
 ipcMain.handle('sox:devices', async()=>({items:[], selected:recConfig.device||'default'}));
 ipcMain.handle('rec:getConfig', async()=>recConfig);
 ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
@@ -2219,7 +2031,7 @@ ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
   return {ok:true, recConfig};
 });
 
-// ---------------- Chat + Doc ingest ----------------
+// ===== Chat + Doc ingest =====
 // Phase-10 unified Groq backend endpoint
 ipcMain.handle("ask", async (_e, prompt) => {
   try {
@@ -2417,10 +2229,7 @@ ipcMain.handle("search:stats", async () => {
     return { ok: false, error: e.message };
   }
 });
-
-// --------------------------------------------------------
 // macOS Native Screen Capture Loader (safe, deduped)
-// --------------------------------------------------------
 //const fs = require("fs");
 //const path = require("path");
 
@@ -2438,7 +2247,7 @@ function resolveNativeAddon() {
 
   for (const p of candidates) {
     if (fs.existsSync(p)) {
-      console.log("[mac-native] Using addon at:", p);
+      debugLog("[mac-native] Using addon at:", p);
       return p;
     }
   }
@@ -2454,9 +2263,9 @@ try {
 
   if (addonPath) {
     macNative = require(addonPath);
-    console.log("[mac-native] addon loaded OK");
+    debugLog("[mac-native] addon loaded OK");
   } else {
-    console.log("[mac-native] addon unavailable — fallback will be used");
+    debugLog("[mac-native] addon unavailable — fallback will be used");
   }
 } catch (err) {
   console.error("[mac-native] preload failed:", err);
@@ -2477,11 +2286,8 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       y: bounds.y + bounds.height / 2
     });
 
-    console.log("[screenread] display", { id: display.id, bounds: display.bounds });
-
-    //--------------------------------------------------------------------
+    debugLog("[screenread] display", { id: display.id, bounds: display.bounds });
     // 🔹 Compute the region (shared across mac + fallback)
-    //--------------------------------------------------------------------
     let captureRegion = null;
 
     // ❌ OLD (buggy) lines – keep as comments so nothing is "removed"
@@ -2536,12 +2342,9 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
         height: regionHeight
       };
     }
-
-    //--------------------------------------------------------------------
     // 🔥🔥🔥 macOS NATIVE CAPTURE (native-macos-capture)
-    //--------------------------------------------------------------------
     if (process.platform === "darwin") {
-      console.log("[mac-native] attempting native capture");
+      debugLog("[mac-native] attempting native capture");
       const nativeAddon = macNative; // preload at top of main.js
 
       if (!nativeAddon || typeof nativeAddon.captureScreenRegion !== "function") {
@@ -2551,7 +2354,7 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
           // small delay so overlay / window state settles
           await new Promise(r => setTimeout(r, 80));
 
-          console.log(
+          debugLog(
             "[mac-native] addon loaded. has captureScreenRegion =",
             typeof nativeAddon.captureScreenRegion
           );
@@ -2574,12 +2377,12 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
             height: Math.round(padded.height * scale)
           };
 
-          console.log("[mac-native] scaled region:", scaled);
+          debugLog("[mac-native] scaled region:", scaled);
 
           const imgBase64 = nativeAddon.captureScreenRegion(scaled);
 
           if (imgBase64) {
-            console.log("[mac-native] capture success");
+            debugLog("[mac-native] capture success");
             const normalized = await normalizeMacImage(imgBase64);
             return { ok: true, base64: normalized.toString("base64") };
           } else {
@@ -2590,11 +2393,7 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
         }
       }
     }
-
-    //--------------------------------------------------------------------
     // 🔹 FALLBACK (Electron desktopCapturer) — unchanged
-    //--------------------------------------------------------------------
-
     const displayWidth = Math.max(
       1,
       Number(display?.size?.width) || Number(display?.bounds?.width) || 1
@@ -2642,7 +2441,7 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
 
 
 
-// ---------------- Window controls / env ----------------
+// ===== Window controls / env =====
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
 ipcMain.handle("window:close", async () => {

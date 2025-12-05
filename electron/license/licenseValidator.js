@@ -1,4 +1,4 @@
-// Placeholder LemonSqueezy validation.
+// ===== License validation placeholder =====
 // We only simulate valid license for now.
 // Later replace with real API request.
 

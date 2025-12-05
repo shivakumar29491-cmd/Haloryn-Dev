@@ -1,3 +1,4 @@
+// ===== Activity Dashboard Wiring =====
 const startBtn = document.getElementById("startSessionBtn");
 const cards = Array.from(document.querySelectorAll(".card"));
 const heroUserName = document.getElementById("heroUserName");
@@ -8,6 +9,7 @@ const activityUserMenu = document.getElementById("activityUserMenu");
 const activityAccount = document.getElementById("activityAccount");
 const activitySignout = document.getElementById("activitySignout");
 
+// ===== Session controls =====
 function startSession() {
   const wrapper = document.getElementById("activityWrapper");
   if (wrapper) wrapper.classList.add("slide-up");
@@ -23,9 +25,9 @@ function startSession() {
 }
 
 if (startBtn) startBtn.addEventListener("click", startSession);
-cards.forEach(c => c.addEventListener("click", startSession));
+cards.forEach((c) => c.addEventListener("click", startSession));
 
-// Populate basic activity timeline with history from main
+// ===== Populate activity timeline =====
 async function loadHistory() {
   try {
     const history = await window.electron?.invoke?.("activity:history");
@@ -88,89 +90,68 @@ async function loadHistory() {
 }
 
 window.addEventListener("DOMContentLoaded", loadHistory);
-// ------- Filter & Clear Logic -------
+// ===== Filter & Clear Logic =====
 
 const rangeDropdown = document.getElementById("historyRange");
 const clearBtn = document.getElementById("clearHistoryBtn");
 
 // Filter display only (frontend)
 rangeDropdown?.addEventListener("change", () => {
-    applyHistoryFilter(rangeDropdown.value);
+  applyHistoryFilter(rangeDropdown.value);
 });
 
 // Clear history for selected range (backend delete)
 clearBtn?.addEventListener("click", async () => {
-    const range = rangeDropdown.value;
-    const ok = confirm(`Clear ${range} history?`);
-    if (!ok) return;
+  const range = rangeDropdown.value;
+  const ok = confirm(`Clear ${range} history?`);
+  if (!ok) return;
 
-    try {
-        await window.electronAPI.clearHistoryByRange(range);
-        window.location.reload(); // refresh UI
-    } catch (e) {
-        console.error("Clear history failed:", e);
-    }
+  try {
+    await window.electronAPI.clearHistoryByRange(range);
+    window.location.reload();
+  } catch (e) {
+    console.error("Clear history failed:", e);
+  }
 });
 
-// Frontend filtering
+// Frontend filtering (calendar buckets)
 function applyHistoryFilter(range) {
-    const allItems = document.querySelectorAll(".activity-item");
-    const now = new Date();
+  const allItems = document.querySelectorAll(".activity-item");
+  const now = new Date();
 
-    // TODAY START
-    const todayStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-    ).getTime();
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  const yesterdayStart = todayStart - 86400000;
 
-    // YESTERDAY START
-    const yesterdayStart = todayStart - 86400000;
+  const dayOfWeek = now.getDay();
+  const mondayThisWeek = new Date(now);
+  mondayThisWeek.setHours(0, 0, 0, 0);
+  mondayThisWeek.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
 
-    // -------- CALENDAR WEEK (MONDAY → SUNDAY) --------
-    const dayOfWeek = now.getDay();   // 0=Sun,1=Mon,...6=Sat
+  const mondayLastWeek = new Date(mondayThisWeek);
+  mondayLastWeek.setDate(mondayThisWeek.getDate() - 7);
+  const sundayLastWeek = new Date(mondayLastWeek);
+  sundayLastWeek.setDate(mondayLastWeek.getDate() + 6);
+  const lastWeekStart = mondayLastWeek.getTime();
+  const lastWeekEnd = sundayLastWeek.getTime() + 86399999;
 
-    // Calculate this week's Monday
-    const mondayThisWeek = new Date(now);
-    mondayThisWeek.setHours(0, 0, 0, 0);
-    mondayThisWeek.setDate(
-        now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1)
-    );
+  allItems.forEach((item) => {
+    const ts = Number(item.dataset.ts || 0);
+    let show = true;
 
-    // Last week's Monday
-    const mondayLastWeek = new Date(mondayThisWeek);
-    mondayLastWeek.setDate(mondayThisWeek.getDate() - 7);
+    if (range === "today") {
+      show = ts >= todayStart;
+    } else if (range === "yesterday") {
+      show = ts >= yesterdayStart && ts < todayStart;
+    } else if (range === "week") {
+      show = ts >= lastWeekStart && ts <= lastWeekEnd;
+    }
 
-    // Last week's Sunday (end of week)
-    const sundayLastWeek = new Date(mondayLastWeek);
-    sundayLastWeek.setDate(mondayLastWeek.getDate() + 6);
-
-    const lastWeekStart = mondayLastWeek.getTime();
-    const lastWeekEnd = sundayLastWeek.getTime() + 86399999; // end of Sunday 23:59:59
-
-    // --------------------------------------------------
-
-    allItems.forEach(item => {
-        const ts = Number(item.dataset.ts || 0);
-
-        let show = true;
-
-        if (range === "today") {
-            show = ts >= todayStart;
-
-        } else if (range === "yesterday") {
-            show = ts >= yesterdayStart && ts < todayStart;
-
-        } else if (range === "week") {
-            // SHOW ONLY entries from last calendar week (Mon–Sun)
-            show = ts >= lastWeekStart && ts <= lastWeekEnd;
-
-        } else {
-            show = true;
-        }
-
-        item.style.display = show ? "flex" : "none";
-    });
+    item.classList.toggle("hidden", !show);
+  });
 }
 
 // Populate hero user info

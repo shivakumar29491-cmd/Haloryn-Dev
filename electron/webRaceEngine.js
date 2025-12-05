@@ -1,17 +1,10 @@
-// =====================================================
-// webRaceEngine.js — Phase 8
-// Runs all search engines in parallel and returns fastest result
-// =====================================================
+// ===== Web Race Engine (Phase 8) =====
+// Runs all search engines in parallel and returns the fastest result
 
 const searchRouter = require('./search/searchRouter');
 const { recordSuccess, recordError } = require('./providerStats');
 
-/**
- * Race logic:
- * - Fire all providers at once
- * - Whichever provider returns first with a valid answer wins
- * - Record provider stats
- */
+// ===== Race logic =====
 async function webRace(prompt) {
   const startTime = Date.now();
 

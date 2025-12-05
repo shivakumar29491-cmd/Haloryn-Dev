@@ -34,4 +34,3 @@ It listens through your microphone 🎙️, transcribes live speech using Whispe
 ```bash
 git clone https://github.com/shivakumar29491-cmd/Haloryn.git
 cd Haloryn
-

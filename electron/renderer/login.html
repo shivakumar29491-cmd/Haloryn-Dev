@@ -1,73 +1,65 @@
-<!--
-  (c) 2025 iMSK Consultants LLC - Haloryn AI
-  All Rights Reserved.
--->
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Haloryn Login</title>
-  <link rel="stylesheet" href="styles/auth.css">
-  <script type="importmap">
-  {
-    "imports": {
-      "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
-      "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
-      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+<!-- (c) 2025 iMSK Consultants LLC - Haloryn AI -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Haloryn Login</title>
+    <link rel="stylesheet" href="styles/auth.css" />
+    <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+      }
     }
-  }
-  </script>
-</head>
+    </script>
+  </head>
 
-<body>
-  <div class="login-chrome">
-    <div class="brand-inline">
-      <img src="icons/haloryn-32.png" class="brand-logo" alt="Haloryn">
-      <div class="brand-text">
-        <div class="brand-title">Haloryn</div>
-        <div class="brand-sub">Secure sign-in</div>
+  <body>
+    <div class="login-chrome">
+      <div class="brand-inline">
+        <img src="icons/haloryn-32.png" class="brand-logo" alt="Haloryn" />
+        <div class="brand-text">
+          <div class="brand-title">Haloryn</div>
+          <div class="brand-sub">Secure sign-in</div>
+        </div>
       </div>
-    </div>
-    <div class="window-buttons">
-      <button id="win-min" title="Minimize">-</button>
-      <button id="win-max" title="Maximize">□</button>
-      <button id="win-close" title="Close">✕</button>
-    </div>
-  </div>
-
-  <div class="box">
-    <div class="box-header">
-      <img src="icons/haloryn-64.png" class="box-logo" alt="Haloryn logo">
-      <div>
-        <div class="box-title">Welcome back</div>
-        <div class="box-sub">Sign in to continue</div>
+      <div class="window-buttons">
+        <button id="win-min" title="Minimize">-</button>
+        <button id="win-max" title="Maximize">□</button>
+        <button id="win-close" title="Close">✕</button>
       </div>
     </div>
 
-    <input id="loginEmail" placeholder="Email">
-    <input id="loginPassword" type="password" placeholder="Password">
+    <div class="box">
+      <div class="box-header">
+        <img src="icons/haloryn-64.png" class="box-logo" alt="Haloryn logo" />
+        <div>
+          <div class="box-title">Welcome back</div>
+          <div class="box-sub">Sign in to continue</div>
+        </div>
+      </div>
 
-    <select id="loginOtpTo">
-      <option value="email">Send OTP to Email</option>
-      <option value="phone">Send OTP to Phone</option>
-    </select>
+      <input id="loginEmail" placeholder="Email" />
+      <input id="loginPassword" type="password" placeholder="Password" />
 
-    <input id="loginPhone" placeholder="Phone (if Phone OTP chosen)">
+      <select id="loginOtpTo">
+        <option value="email">Send OTP to Email</option>
+        <option value="phone">Send OTP to Phone</option>
+      </select>
 
-    <button id="loginBtn">Login</button>
+      <input id="loginPhone" placeholder="Phone (if Phone OTP chosen)" />
 
-    <button id="googleLogin">Continue with Google</button>
-    <button id="facebookLogin">Continue with Facebook</button>
-<button id="trialBtn" class="trial-btn">Start 7-Day Free Trial</button>
-<p class="trial-note">No credit card required</p>
+      <button id="loginBtn">Login</button>
+      <button id="googleLogin">Continue with Google</button>
+      <button id="facebookLogin">Continue with Facebook</button>
+      <button id="trialBtn" class="trial-btn">Start 7-Day Free Trial</button>
+      <p class="trial-note">No credit card required</p>
 
-    <p><a href="signup.html">Create account</a></p>
-  </div>
-<script>
-  window.addEventListener("DOMContentLoaded", () => {
-  });
-</script>
-<script type="module" src="scripts/login.js"></script>
+      <p><a href="signup.html">Create account</a></p>
+    </div>
 
-</body>
+    <script type="module" src="scripts/login.js"></script>
+  </body>
 </html>

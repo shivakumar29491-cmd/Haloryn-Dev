@@ -1,4 +1,5 @@
-﻿/* RESET activity page styles completely */
+﻿/* ===== Main app styling ===== */
+/* RESET activity page styles completely */
 /* Reset ONLY inside the live app panel, NOT global */
 :root, body {
   margin: 0;
@@ -638,5 +639,4 @@ button.recording,
 .followup-btn:hover {
   opacity: 1;
 }
-
 

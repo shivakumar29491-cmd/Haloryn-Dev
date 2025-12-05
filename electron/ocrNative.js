@@ -1,6 +1,4 @@
-// ocrNative.js
-// Lightweight, per-OS OCR using built-in frameworks (no Tesseract bundle).
-
+// ===== Native OCR (macOS + Windows) =====
 const { spawn } = require("child_process");
 const fs = require("fs");
 

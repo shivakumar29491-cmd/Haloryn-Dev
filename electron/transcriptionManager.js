@@ -1,5 +1,5 @@
-// transcriptionManager.js
-// Hybrid transcription controller (Groq → fallback Whisper.cpp)
+// ===== Transcription Manager =====
+// Hybrid transcription controller (Groq first, Whisper.cpp fallback)
 
 const { TranscriptionEngine } = require("./transcriptionEngine");
 const { runWhisperCpp } = require("./whisperLocal");
@@ -7,9 +7,7 @@ const { cleanInputIfNeeded } = require("./inputSanitizer");
 
 let groqEngine = null;
 
-/**
- * Initialize Groq engine if API key exists
- */
+// ===== Initialization =====
 function initTranscription(groqKey) {
   if (!groqKey) {
     groqEngine = null;
@@ -27,11 +25,7 @@ function initTranscription(groqKey) {
   }
 }
 
-/**
- * Hybrid STT handler
- * @param {Buffer} audioBuffer
- * @returns {Promise<{raw: string, sanitized: string, source: string}>}
- */
+// ===== Hybrid STT handler =====
 async function transcribeAudio(audioBuffer) {
   if (!audioBuffer || !audioBuffer.length) {
     return { raw: "", sanitized: "", source: "empty" };

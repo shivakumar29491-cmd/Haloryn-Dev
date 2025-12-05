@@ -1,3 +1,4 @@
+// ===== Signup page wiring =====
 import { registerManual } from "../../auth/authManager";
 
 const isDevBypass = window.isPackaged === false;

@@ -1,6 +1,5 @@
-// =====================================================
-// Haloryn — webSearchEngine.js (multi-engine search API layer)
-// =====================================================
+// ===== Web Search Engine Layer =====
+// Multi-engine search API + simple scraping helpers
 
 const fetch   = require('node-fetch');
 const cheerio = require('cheerio');
@@ -17,14 +16,14 @@ function setLogger(fn) {
   logFn = typeof fn === 'function' ? fn : null;
 }
 
-// ---------- Base class ----------
+// ----- Base class -----
 class BaseSearchEngine {
   constructor(name) { this.name = name; }
   isEnabled() { return false; }
   async search(_query, _maxResults) { return []; }
 }
 
-// ---------- SerpAPI (Google-like, needs SERPAPI_KEY) ----------
+// ----- SerpAPI engine (Google-like) -----
 class SerpApiEngine extends BaseSearchEngine {
   constructor() {
     super('serpapi');
@@ -56,7 +55,7 @@ class SerpApiEngine extends BaseSearchEngine {
   }
 }
 
-// ---------- Bing Web Search (needs BING_SEARCH_KEY) ----------
+// ----- Bing Web Search -----
 class BingEngine extends BaseSearchEngine {
   constructor() {
     super('bing');
@@ -81,7 +80,7 @@ class BingEngine extends BaseSearchEngine {
   }
 }
 
-// ---------- DuckDuckGo HTML (fallback, no key) ----------
+// ----- DuckDuckGo HTML fallback -----
 class DuckDuckGoHtmlEngine extends BaseSearchEngine {
   constructor() { super('ddg-html'); }
   isEnabled() { return true; }
@@ -129,7 +128,7 @@ class DuckDuckGoHtmlEngine extends BaseSearchEngine {
   }
 }
 
-// ---------- Engine selection ----------
+// ----- Engine selection -----
 const engines = [
   new SerpApiEngine(),
   new BingEngine(),
@@ -142,9 +141,7 @@ function pickEngine() {
   return e || engines[engines.length - 1];
 }
 
-// ---------- Public API ----------
-
-// Main new API: returns [{title,url,snippet}]
+// ----- Public API -----
 async function searchWeb(query, maxResults = 5) {
   try {
     const engine = pickEngine();
@@ -199,4 +196,3 @@ module.exports = {
   duckDuckGoSearch,   // legacy usage
   fetchAndExtract      // legacy usage
 };
-

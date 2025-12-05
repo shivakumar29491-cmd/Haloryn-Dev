@@ -1,5 +1,4 @@
-// electron/api/utils/providerSelector.js
-// Phase 10 — Search provider priority & utilities
+// ===== Search provider priority utilities =====
 
 // Highest → Lowest priority order
 const providerPriority = [

@@ -1,13 +1,9 @@
-// =====================================================
-// providerStats.js — Phase 8
+// ===== Provider Stats (Phase 8) =====
 // Centralized provider performance tracking
-// =====================================================
 
 const stats = {};
 
-/**
- * Ensure provider entry exists
- */
+// ===== Ensure provider slot exists =====
 function ensure(provider) {
   if (!stats[provider]) {
     stats[provider] = {
@@ -19,9 +15,7 @@ function ensure(provider) {
   }
 }
 
-/**
- * Record a normal successful call
- */
+// ===== Record success =====
 function recordSuccess(provider, latencyMs) {
   ensure(provider);
 
@@ -38,18 +32,14 @@ function recordSuccess(provider, latencyMs) {
   p.lastUsed = Date.now();
 }
 
-/**
- * Record provider error
- */
+// ===== Record error =====
 function recordError(provider) {
   ensure(provider);
   stats[provider].errors++;
   stats[provider].lastUsed = Date.now();
 }
 
-/**
- * Export stats for UI logs
- */
+// ===== Export snapshot =====
 function getStats() {
   return JSON.parse(JSON.stringify(stats));
 }

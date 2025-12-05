@@ -1,9 +1,9 @@
-// inputSanitizer.js
+// ===== Input Sanitizer =====
 // Cleans, repairs, and reconstructs noisy OCR/STT text using Groq LLM
 
 const { groqFastAnswer } = require("./groqEngine");
 
-// Detection: checks if text looks messy/gibberish
+// ===== Detection helpers =====
 function needsSanitization(text = "") {
   if (!text || text.trim().length < 2) return true;
 
@@ -18,7 +18,7 @@ function needsSanitization(text = "") {
   return false;
 }
 
-// MAIN FUNCTION — cleans the text using Groq LLM
+// ===== Main sanitize entrypoint =====
 async function sanitizeInput(text = "") {
   try {
     const prompt = `
@@ -42,7 +42,7 @@ Return ONLY the corrected text, nothing else.
   }
 }
 
-// Unified helper: automatically sanitizes if needed
+// ===== Unified helper =====
 async function cleanInputIfNeeded(text = "") {
   if (needsSanitization(text)) {
     return await sanitizeInput(text);

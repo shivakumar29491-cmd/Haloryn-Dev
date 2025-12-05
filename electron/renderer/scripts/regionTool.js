@@ -1,3 +1,4 @@
+// ===== Region selection overlay logic =====
 const overlay = document.getElementById("regionOverlay");
 const rectEl = document.getElementById("regionRect");
 

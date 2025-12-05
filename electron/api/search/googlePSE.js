@@ -1,4 +1,4 @@
-// api/search/googlePSE.js
+// ===== Google Programmable Search handler =====
 const fetch = require("node-fetch");
 const { normalizeSearchResults } = require("../utils/formatter");
 

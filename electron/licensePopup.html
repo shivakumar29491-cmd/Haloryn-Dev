@@ -1,37 +1,31 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <link rel="stylesheet" href="licensePopup.css">
-</head>
-<body>
-  <div class="box">
-    <h2>Activate Haloryn</h2>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Haloryn License</title>
+    <link rel="stylesheet" href="licensePopup.css" />
+  </head>
+  <body>
+    <div class="box">
+      <h2>Activate Haloryn</h2>
 
-    <input id="licenseKey" placeholder="Enter License Key">
+      <input id="licenseKey" placeholder="Enter License Key" />
+      <button id="activateBtn">Activate License</button>
 
-    <button id="activateBtn">Activate License</button>
+      <hr />
 
-    <hr>
+      <label class="trialLabel">Start 14-Day Trial</label>
+      <input
+        id="trialEmail"
+        placeholder="Enter your email to begin trial"
+        type="email"
+        class="trialEmailInput"
+      />
+      <button id="startTrialBtn">Start 14-Day Trial</button>
 
-   <hr>
+      <p id="status"></p>
+    </div>
 
-<label class="trialLabel">Start 14-Day Trial</label>
-
-<input 
-    id="trialEmail" 
-    placeholder="Enter your email to begin trial" 
-    type="email"
-    class="trialEmailInput"
-/>
-
-<button id="startTrialBtn">Start 14-Day Trial</button>
-
-<p id="status"></p>
-
-
-    <p id="status"></p>
-  </div>
-
-  <script src="licensePopup.js"></script>
-</body>
+    <script src="licensePopup.js"></script>
+  </body>
 </html>

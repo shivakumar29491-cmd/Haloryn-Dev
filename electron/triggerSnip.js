@@ -1,3 +1,4 @@
+// ===== Snipping Tool Trigger =====
 const { exec } = require("child_process");
 
 function triggerSnip() {

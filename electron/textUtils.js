@@ -1,14 +1,13 @@
-// =====================================================
-// Haloryn — textUtils.js (tokenizing, chunking, summaries, intent)
-// =====================================================
+// ===== Text Utilities =====
+// Tokenizing, chunking, summaries, intent helpers
 
-// Stopword list (unchanged from main.js)
+// ===== Stopword list (unchanged) =====
 const STOP = new Set(
   'a an and are as at be by for from has have in into is it its of on or s t that the their to was were will with your you about this those these which who whom whose when where how why what can could should would may might not no yes more most very just also than then'
     .split(' ')
 );
 
-// Tokenizer (unchanged)
+// ===== Tokenizer =====
 function tokenize(s) {
   return (s || '')
     .toLowerCase()
@@ -17,7 +16,7 @@ function tokenize(s) {
     .filter(w => w && w.length > 1 && !STOP.has(w));
 }
 
-// Chunk text into roughly target-sized pieces (unchanged)
+// ===== Chunk text into roughly target-sized pieces =====
 function chunkText(text, target = 1200) {
   const chunks = [];
   let buf = '';
@@ -42,7 +41,7 @@ function chunkText(text, target = 1200) {
   return chunks;
 }
 
-// Select chunks most relevant to the question (unchanged)
+// ===== Select chunks relevant to a question =====
 function selectRelevantChunks(question, text, k = 5) {
   const qTokens = tokenize(question);
   if (qTokens.length === 0) return [];
@@ -65,7 +64,7 @@ function selectRelevantChunks(question, text, k = 5) {
   return scored.slice(0, k).map(x => x.c);
 }
 
-// Simple intent detector (unchanged)
+// ===== Simple intent detector =====
 function detectIntent(q) {
   const s = q.toLowerCase();
   if (/(summari[sz]e|tl;dr|overview)/.test(s)) return 'summarize';
@@ -73,7 +72,7 @@ function detectIntent(q) {
   return 'qa';
 }
 
-// Extractive summary (unchanged)
+// ===== Extractive summary =====
 function extractiveSummary(text, query, maxSentences = 6) {
   if (!text) return '';
   const qwords = (query || '').toLowerCase().split(/\s+/).filter(Boolean);
@@ -106,4 +105,3 @@ module.exports = {
   detectIntent,
   extractiveSummary
 };
-

@@ -1,11 +1,18 @@
+// ===== macOS Native Capture Bridge =====
 const path = require("path");
 
 let addon = null;
 
-// Load native macOS addon
 try {
   addon = require(
-    path.join(__dirname, "..", "native-macos-capture", "build", "Release", "macos_capture.node")
+    path.join(
+      __dirname,
+      "..",
+      "native-macos-capture",
+      "build",
+      "Release",
+      "macos_capture.node"
+    )
   );
   console.log("[macOS] Native capture loaded");
 } catch (err) {
