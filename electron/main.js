@@ -43,6 +43,7 @@ const {
   desktopCapturer
 } = require("electron");
 require("./ipc/licenseIPC");
+const { initTranscription, transcribeAudio } = require("./transcriptionManager");
 
 global.IS_PACKAGED = app.isPackaged;
 
@@ -114,6 +115,21 @@ function persistRegion(region) {
     console.warn("[screenread] save failed:", err.message);
     return false;
   }
+}
+
+function normalizeAudioBuffer(payload) {
+  if (!payload) return null;
+  if (Buffer.isBuffer(payload)) return payload;
+  if (typeof ArrayBuffer !== "undefined" && payload instanceof ArrayBuffer) {
+    return Buffer.from(payload);
+  }
+  if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView && ArrayBuffer.isView(payload)) {
+    return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+  }
+  if (payload?.type === "Buffer" && Array.isArray(payload?.data)) {
+    return Buffer.from(payload.data);
+  }
+  return null;
 }
 
 ipcMain.handle("screenread:get-region", () => {
@@ -462,6 +478,9 @@ function readSavedSession() {
 }
 
 setHistoryOwnerFromSession(readSavedSession());
+
+// Initialize Groq transcription engine if key is present
+initTranscription(process.env.GROQ_API_KEY);
 
 let tray = null;
 let incognitoOn = false;
@@ -1999,6 +2018,18 @@ ipcMain.handle('live:stop', async()=>{
 });
 // ... existing code above ...
 // FAST transcription using Groq Whisper (Phase 7)
+ipcMain.handle("stt:transcribe", async (_event, audioPayload) => {
+  try {
+    const buffer = normalizeAudioBuffer(audioPayload);
+    if (!buffer) throw new Error("Invalid audio payload");
+    const result = await transcribeAudio(buffer);
+    return { ok: true, ...result };
+  } catch (err) {
+    console.error("[IPC stt:transcribe] Failed:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
   try {
     const text = await groqWhisperTranscribe(audioBuffer);

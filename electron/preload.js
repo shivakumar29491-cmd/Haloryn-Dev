@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld('companion', {
   onTranscript: (cb) => ipcRenderer.on('companion:transcript', (_, t) => cb(t)),
   onSuggestion: (cb) => ipcRenderer.on('companion:suggestion', (_, s) => cb(s))
 });
+
+// Hybrid STT bridge (renderer -> main -> transcriptionManager)
+contextBridge.exposeInMainWorld("stt", {
+  transcribe: (audioBuffer) => ipcRenderer.invoke("stt:transcribe", audioBuffer)
+});
 contextBridge.exposeInMainWorld('windowCtl', {
    minimize: () => ipcRenderer.invoke('window:minimize'),
    maximize: () => ipcRenderer.invoke('window:maximize'),
