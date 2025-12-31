@@ -1,23 +1,22 @@
-// answerRenderer.js
-
-const $  = (sel) => document.querySelector(sel);
+// ===== Answer Renderer Popout =====
+const $ = (sel) => document.querySelector(sel);
 const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
 
-const answerLog = $('#popoutAnswerLog');
-const btnClose  = $('#btn-close-pop');
+const answerLog = $("#popoutAnswerLog");
+const btnClose = $("#btn-close-pop");
 
 function appendAnswerBlock(text) {
   if (!answerLog) return;
-  const s = String(text || '').trim();
+  const s = String(text || "").trim();
   if (!s) return;
 
-  const block = document.createElement('div');
-  block.className = 'answer-block';
+  const block = document.createElement("div");
+  block.className = "answer-block";
   block.textContent = s;
 
-  const sep = document.createElement('div');
-  sep.className = 'answer-separator';
-  sep.textContent = '--- suggestion ended ---';
+  const sep = document.createElement("div");
+  sep.className = "answer-separator";
+  sep.textContent = "--- suggestion ended ---";
 
   answerLog.appendChild(block);
   answerLog.appendChild(sep);
@@ -27,7 +26,7 @@ function appendAnswerBlock(text) {
 // Load existing history on startup
 (async () => {
   try {
-    const res = await window.electron?.invoke('answer:getHistory');
+    const res = await window.electron?.invoke("answer:getHistory");
     if (res && res.ok && Array.isArray(res.items)) {
       res.items.forEach(appendAnswerBlock);
     }
@@ -37,10 +36,10 @@ function appendAnswerBlock(text) {
 })();
 
 // Live updates from main process
-window.electron?.on('answer:new', (t) => appendAnswerBlock(t));
-window.electron?.on('answer:clear', () => {
-  if (answerLog) answerLog.innerHTML = '';
+window.electron?.on("answer:new", (t) => appendAnswerBlock(t));
+window.electron?.on("answer:clear", () => {
+  if (answerLog) answerLog.innerHTML = "";
 });
 
 // Simple close button
-on(btnClose, 'click', () => window.close());
+on(btnClose, "click", () => window.close());

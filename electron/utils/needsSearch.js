@@ -1,4 +1,5 @@
-﻿const KEYWORDS = [
+﻿// ===== Simple search trigger heuristics =====
+const KEYWORDS = [
   "weather",
   "today",
   "news",

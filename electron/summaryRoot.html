@@ -1,40 +1,30 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Haloryn — Session Summary</title>
-  <link rel="stylesheet" href="./styles/summary.css" />
-</head>
-<script src="./summary.js"></script>
-
-<body>
-  <div class="summary-container">
-
-    <!-- TOP BAR -->
-    <div class="summary-chrome">
-      <div class="title">
-        <img src="./icons/haloryn-32.png" class="logo" />
-        <span>Haloryn — Session Summary</span>
+  <head>
+    <meta charset="utf-8" />
+    <title>Haloryn — Session Summary</title>
+    <link rel="stylesheet" href="./styles/summary.css" />
+  </head>
+  <body>
+    <div class="summary-container">
+      <div class="summary-chrome">
+        <div class="title">
+          <img src="./icons/haloryn-32.png" class="logo" alt="Haloryn" />
+          <span>Haloryn — Session Summary</span>
+        </div>
+        <button id="closeSummary" class="close-btn" aria-label="Close">✕</button>
       </div>
 
-      <!-- THIS X BUTTON QUITS THE APP -->
-      <button id="closeSummary" class="close-btn" aria-label="Close">✕</button>
-    </div>
+      <h2 class="summary-header">Your Session at a Glance</h2>
 
-    <!-- HEADER -->
-    <h2 class="summary-header">Your Session at a Glance</h2>
-
-
-    <!-- DETAIL SECTION -->
-    <div id="sessionDetail" class="detail hidden">
-      <div class="detail-block">
-        <h4>Session Summary</h4>
-        <div id="detailTranscript" class="transcript-lines"></div>
+      <div id="sessionDetail" class="detail hidden">
+        <div class="detail-block">
+          <h4>Session Summary</h4>
+          <div id="detailTranscript" class="transcript-lines"></div>
+        </div>
       </div>
     </div>
 
-  </div>
-
-<script src="summary.js" defer></script>
-</body>
+    <script src="summary.js" defer></script>
+  </body>
 </html>

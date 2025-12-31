@@ -1,5 +1,4 @@
-// electron/api/groqweb.js
-// Correct CommonJS version for Electron backend
+// ===== Groq Web Chat Handler =====
 
 const fetch = require("node-fetch");
 

@@ -1,37 +1,33 @@
-/*
-  (c) 2025 iMSK Consultants LLC - Haloryn AI
-  All Rights Reserved.
-*/
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Haloryn Signup</title>
-  <link rel="stylesheet" href="styles/auth.css">
-</head>
+<!-- (c) 2025 iMSK Consultants LLC - Haloryn AI -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Haloryn Signup</title>
+    <link rel="stylesheet" href="styles/auth.css" />
+  </head>
 
-<body>
-  <div class="box">
-    <h2>Create Account</h2>
+  <body>
+    <div class="box">
+      <h2>Create Account</h2>
 
-    <input id="first" placeholder="First Name">
-    <input id="last" placeholder="Last Name">
-    <input id="phone" placeholder="Phone Number">
-    <input id="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Password">
+      <input id="first" placeholder="First Name" />
+      <input id="last" placeholder="Last Name" />
+      <input id="phone" placeholder="Phone Number" />
+      <input id="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password" />
 
-    <select id="otpTo">
-      <option value="email">Email</option>
-      <option value="phone">Phone</option>
-    </select>
+      <select id="otpTo">
+        <option value="email">Email</option>
+        <option value="phone">Phone</option>
+      </select>
 
-    <button id="signupBtn">Create Account</button>
+      <button id="signupBtn">Create Account</button>
+      <div id="recaptcha-container"></div>
 
-    <div id="recaptcha-container"></div>
+      <p><a href="login.html">Already have an account?</a></p>
+    </div>
 
-    <p><a href="login.html">Already have an account?</a></p>
-  </div>
-
-  <script type="module" src="scripts/signup.js"></script>
-</body>
+    <script type="module" src="scripts/signup.js"></script>
+  </body>
 </html>

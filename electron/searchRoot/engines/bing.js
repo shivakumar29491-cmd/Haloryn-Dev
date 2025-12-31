@@ -1,5 +1,4 @@
-// search/engines/bing.js
-// Simple Bing Web Search wrapper returning normalized results
+// ===== Bing search engine wrapper =====
 
 const fetch = require('node-fetch');
 
@@ -40,4 +39,3 @@ async function bingSearch(query, { maxResults = 5, timeoutMs = 2500 } = {}) {
 }
 
 module.exports = { bingSearch };
-

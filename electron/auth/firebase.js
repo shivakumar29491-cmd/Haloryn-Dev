@@ -18,6 +18,7 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// ===== Firebase client bootstrap =====
 const firebaseConfig = {
   apiKey: "AIzaSyDWnT8jKXinK2rpv6XIVlcMPnoIyFXq_Zo",
   authDomain: "haloryn.firebaseapp.com",

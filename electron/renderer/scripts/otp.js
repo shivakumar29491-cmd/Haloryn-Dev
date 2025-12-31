@@ -1,3 +1,4 @@
+// ===== OTP verification wiring =====
 import { verifyOtpFlow } from "../../auth/authManager";
 
 verifyOtpBtn.onclick = async () => {

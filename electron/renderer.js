@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ⭐ REQUIRED ⭐
     window.electronAPI.onTriggerFinishSession(() => {
-    console.log("FINISH SESSION → building summary");
+    debugLog("FINISH SESSION → building summary");
     sendSessionSummary();
 });
 
@@ -138,8 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-// ------------------ Helpers ------------------
-
+// ===== Helpers =====
 const $  = (sel) => document.querySelector(sel);
 
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -172,11 +171,7 @@ function initiateLocationDetection() {
     { timeout: 7000, maximumAge: 5 * 60 * 1000 }
   );
 }
-// =====================================================
-
-//   UNIVERSAL ANSWER PIPELINE (SAFE + NO RECURSION)
-
-// =====================================================
+// ===== Universal Answer Pipeline (Safe + No Recursion) =====
 
 async function unifiedAsk(promptText) {
 
@@ -247,15 +242,19 @@ function ensureRegionStyle() {
   const style = document.createElement("style");
   style.id = "screen-region-style";
   style.textContent = `
+
+
 .screen-region-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 8, 16, 0.5);
-  z-index: 99999;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  background: none !important;
+  opacity: 1 !important;
+  z-index: 999999;
 }
+
+
+
+
 .screen-region-selector {
   position: absolute;
   border: 2px dashed #40c4ff;
@@ -514,7 +513,7 @@ async function showRegionSelector(initialRegion = null) {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
       const actionType = button.dataset.action;
-      console.log("[screen] selector action", actionType);
+      debugLog("[screen] selector action", actionType);
       releasePointer();
       if (actionType === "confirm") {
         const region = {
@@ -529,10 +528,10 @@ async function showRegionSelector(initialRegion = null) {
           width: region.width,
           height: region.height
         });
-        console.log("[screen] selector confirmed region", savedRegion);
+        debugLog("[screen] selector confirmed region", savedRegion);
         cleanup(savedRegion);
       } else if (actionType === "cancel") {
-        console.log("[screen] selection canceled by user");
+        debugLog("[screen] selection canceled by user");
         cleanup(null);
       }
     });
@@ -556,18 +555,35 @@ function clampToWindow(region) {
 }
 
 async function persistScreenRegion(region) {
-  if (!region || typeof region.x !== "number" || region.width <= 0 || region.height <= 0) {
+  if (
+    !region ||
+    typeof region.x !== "number" ||
+    typeof region.y !== "number" ||
+    region.width <= 0 ||
+    region.height <= 0
+  ) {
+    console.warn("[screen] invalid region passed to persist:", region);
     return null;
   }
+
   try {
+    debugLog("[screen] SAVING NEW REGION:", region);
+
+    // ALWAYS overwrite cache — avoids stale region issues
+    screenRegionCache = { ...region };
+
+    // Save to backend (main.js)
     const result = await window.electronAPI.saveScreenReadRegion(region);
-    console.log("[screen] save region result", result);
+    debugLog("[screen] save region result:", result);
+
+    return screenRegionCache;
+
   } catch (err) {
-    console.error("[screen] save region error", err);
+    console.error("[screen] save region error:", err);
+    return null;
   }
-  screenRegionCache = region;
-  return screenRegionCache;
 }
+
 
 async function inlineScreenRegion(initialRegion = null) {
   const selected = await showRegionSelector(initialRegion);
@@ -581,20 +597,21 @@ async function selectScreenRegion() {
   try {
     const stored = await window.electronAPI.getScreenReadRegion();
     storedRegion = stored?.region || null;
-    console.log("[screen] stored region response", stored);
+    debugLog("[screen] stored region response", stored);
   } catch (err) {
     console.error("[screen] read region error", err);
   }
 
   const initialRegion = screenRegionCache || storedRegion || null;
-  if (initialRegion && !screenRegionCache) {
-    screenRegionCache = initialRegion;
-  }
+  if (initialRegion) {
+    screenRegionCache = initialRegion;   // always refresh cache
+}
 
   if (window.electronAPI?.openScreenOverlay) {
     try {
       const overlayRes = await window.electronAPI.openScreenOverlay(initialRegion);
-      console.log("[screen] overlay helper response", overlayRes);
+      console.debug("[screen] overlay helper response", overlayRes);
+
       if (overlayRes?.ok && overlayRes.region?.width > 4 && overlayRes.region?.height > 4) {
         return await persistScreenRegion(overlayRes.region);
       }
@@ -627,11 +644,16 @@ function normalizeCapturedText(text) {
     .map((line) => line.trim())
     .filter(Boolean);
   const filtered = [];
+  const seenKeys = new Set();
   for (const line of lines) {
     if (/^\[?screen/i.test(line)) continue;
     if (/^ln\s*\d+/i.test(line)) continue;
     if (/^col\s*\d+/i.test(line)) continue;
     if (/^{/.test(line)) continue;
+    const key = line.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (!key) continue;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
     filtered.push(line);
   }
   return filtered.join("\n");
@@ -667,8 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-// --- Harden transcript as display-only (no typing/paste/drop) ---
-
+// ===== Harden transcript as display-only (no typing/paste/drop) =====
 function hardenTranscript(el) {
 
   if (!el) return;
@@ -729,8 +750,7 @@ if (transcriptSink) {
 
 
 
-// --- Unified transcript helpers (used for both typed + spoken lines) ---
-
+// ===== Unified transcript helpers (used for both typed + spoken lines) =====
 function _appendTranscript(line, cls) {
 
   if (!transcriptSink) return;
@@ -769,8 +789,7 @@ function _appendTranscript(line, cls) {
 
 }
 
-// --- Answer rendering: virtualized list + streaming helpers ---
-
+// ===== Answer rendering: virtualized list + streaming helpers =====
 const ALL_ANSWERS = []; // { text, maxLen }
 
 const MAX_RENDERED = 10;
@@ -833,8 +852,7 @@ function maybeAutoScroll(container) {
 
 }
 
-// ---- Virtualized Chat Renderer ----
-
+// ===== Virtualized Chat Renderer =====
 const VIRTUAL_WINDOW = 3; // render 1 above, 1 current, 1 below
 let lastScrollTop = 0;
 
@@ -975,9 +993,8 @@ function finalizeStreamingAnswer(finalText) {
       ALL_ANSWERS.push({ text: finalNorm, maxLen: activeStream.maxLen });
     }
 
-    // -------------------------------------------------------
     // NEW: Save to the last turn block
-    // -------------------------------------------------------
+
     if (__turns.length > 0) {
       __turns[__turns.length - 1].haloryn = finalNorm;
     }
@@ -1072,14 +1089,6 @@ function handleStreamError(payload) {
 
 }
 
-
-
-
-
-
-
-
-
 // De-dupe helper to avoid double lines (from IPC + companion overlap)
 
 let __lastLine = '';
@@ -1140,8 +1149,7 @@ function appendLog(line) {
 
 
 
-// ------------------ API usage panel helpers ------------------
-
+// ===== API usage panel helpers =====
 const apiStats = {};
 
 
@@ -1330,8 +1338,7 @@ function handleApiLogLine(line){
 
 
 
-// ------------------ Doc toggle + DocEnrich wiring ------------------
-
+// ===== Doc toggle + DocEnrich wiring =====
 const docToggle       = $('#docToggle');
 
 const docEnrichToggle = $('#docEnrichToggle');
@@ -1490,8 +1497,7 @@ function isStatusyBanner(t) {
 
 
 
-// ------------------ Tabs ------------------
-
+// ===== Tabs =====
 (function wireTabs(){
 
   const tabs = $$('.tab');
@@ -1528,8 +1534,7 @@ function isStatusyBanner(t) {
 
 
 
-// ------------------ Window controls ------------------
-
+// ===== Window controls =====
 on($('#btn-min'), 'click', () => window.windowCtl?.minimize());
 
 on($('#btn-max'), 'click', () => window.windowCtl?.maximize());
@@ -1539,8 +1544,7 @@ on($('#btn-close'), 'click', async () => { await sendSessionSummary();   });
 
 
 
-// ------------------ Live controls ------------------
-
+// ===== Live controls =====
 const btnStart = pickFirst($('#startBtn'), $('[data-action="start"]'), $('[title="Start"]'));
 
 const btnStop  = pickFirst($('#stopBtn'),  $('[data-action="stop"]'),  $('[title="Stop"]'));
@@ -1597,8 +1601,7 @@ const menuSignout = document.getElementById("menuSignout");
 
 
 
-// --- Single Transcript helpers ---
-
+// ===== Single Transcript helpers =====
 let _txSeenLen = 0;
 
 let _txLastLine = '';
@@ -1722,60 +1725,155 @@ function flushLiveTranscriptStream() {
 
 resetLiveTranscriptStream();
 
-//---------------------------------------------
-
 // SCREEN READ (Background capture)
-// ---------------------------------------------
+
 on(screenReadBtn, "click", async () => {
   if (!screenReadBtn) return;
   screenReadBtn.disabled = true;
   screenReadBtn.classList.add("active");
   setState("screen: capturing...");
-  console.log("[screen] capture requested");
-  window.windowCtl?.minimize();
-  const region = await selectScreenRegion();
-  window.windowCtl?.restore();
-  if (!region) {
-    appendLog("[screen] region not configured");
-    screenReadBtn.disabled = false;
-    screenReadBtn.classList.remove("active");
-    setState("idle");
+
+  // Reset transcript/chat so previous runs don't linger
+  lastScreenReadContext = "";
+  if (liveTranscript) {
+    liveTranscript.value = "";
+  }
+  if (chatInput) {
+    chatInput.value = "";
+  }
+
+  debugLog("[screen] capture requested");
+
+  // Minimize for region selection
+    // Old:
+  // window.windowCtl?.minimize();
+  // const regionRaw = await selectScreenRegion();
+  // window.windowCtl?.restore();
+
+// REGION SELECTION (with macOS capture fixes)
+// ===== // =====
+// REGION SELECTION (FINAL MACOS FIXED VERSION)
+
+let shouldRestore = false;
+
+// 1) Allow macOS overlay system to initialize
+await new Promise(r => setTimeout(r, 120));
+
+// 2) Minimize Haloryn window
+if (window.windowCtl?.minimize) {
+  try {
+    await window.windowCtl.minimize();
+    await window.windowCtl.awaitMinimize();  // ⭐ wait for actual minimize event
+    shouldRestore = true;
+  } catch (err) {
+    console.debug("[screen] minimize failed:", err);
+  }
+}
+
+// 3) Show region selector
+const regionRaw = await selectScreenRegion();
+
+// 4) If canceled → restore & exit
+if (!regionRaw || !regionRaw.width || !regionRaw.height) {
+  appendLog("[screen] region not configured");
+  if (shouldRestore) window.windowCtl?.restore();
+  cleanupScreenRead();
+  return;
+}
+
+// 5) Allow compositor to settle before capturing
+await new Promise((res) => setTimeout(res, 200));
+
+
+
+
+  // ===== PATCH C: SCALE REGION =====
+const scale = window.devicePixelRatio || 1;
+  const region = {
+    x: Math.round(regionRaw.x * scale),
+    y: Math.round(regionRaw.y * scale),
+    width: Math.round(regionRaw.width * scale),
+    height: Math.round(regionRaw.height * scale)
+  };
+
+  debugLog("[screen] FINAL SCALED REGION:", region);
+
+  try {
+  setCaptureClean(true);
+
+  // Keep out of transcript / Answer UI
+  console.debug("[overlay selection] region:", region);
+
+  // ===== SCREEN CAPTURE =====
+await new Promise(res => setTimeout(res, 180));
+  const res = await window.electronAPI.captureScreenBelow(region);
+
+  if (shouldRestore) {
+    window.windowCtl?.restore();
+    await new Promise((r) => setTimeout(r, 120));
+  }
+
+  // Keep out of transcript / Answer UI
+  console.debug("[screen] capture response", res);
+
+  if (!res?.ok) {
+    appendLog("[screen] capture failed: " + (res?.error || "no data"));
     return;
   }
-  window.windowCtl?.minimize();
-  try {
-    setCaptureClean(true);
-    const res = await window.electronAPI.captureScreenBelow(region);
-    console.log("[screen] capture response", res);
-    if (res?.base64) {
-      console.log("[screen] base64 length", res.base64.length);
-    }
-    if (!res?.ok) {
-      appendLog("[screen] capture failed: " + (res?.error || "no data"));
-      return;
-    }
-    if (!res?.base64 || typeof res.base64 !== "string" || res.base64.length < 10) {
+
+
+    if (!res.base64 || res.base64.length < 10) {
       appendLog("[screen] invalid or empty capture — skipping OCR");
-      console.log("[screen] invalid capture payload:", res);
+      debugLog("[screen] invalid payload:", res);
       return;
     }
 
-    console.log("[screen] sending capture to OCR");
-    window.electron.send("ocr:image", { base64: res.base64 });
+    // Use the captured image
+    const base64 = res.base64;
+
+    // ===== VALIDATION BLOCK =====
+if (!region || !region.width || !region.height) {
+      console.warn("[screen] OCR blocked — invalid region:", region);
+      return;
+    }
+
+    if (!base64 || base64.length < 100) {
+      console.warn("[screen] OCR blocked — capture too small:", base64?.length);
+      return;
+    }
+
+    const validation = await window.electronAPI.ocrValidate(base64);
+    if (!validation?.ok) {
+      console.warn("[screen] OCR blocked — backend rejected:", validation?.reason);
+      return;
+    }
+
+    debugLog("[screen] sending capture to OCR");
+
+    // ===== OCR PROCESS =====
+const text = await window.electronAPI.ocrImage(base64);
+
+    await processOcrText(text);
 
   } catch (err) {
     appendLog("[screen] capture error: " + (err?.message || err));
   } finally {
-    setCaptureClean(false);
-    screenReadBtn.disabled = false;
-    screenReadBtn.classList.remove("active");
-    window.windowCtl?.restore();
-    setState("idle");
+    cleanupScreenRead();
   }
 });
 
-// --- Incognito (hide taskbar/tray + block screen capture; keep app visible) ---
+// CLEANUP HELPER
 
+function cleanupScreenRead() {
+  setCaptureClean(false);
+  screenReadBtn.disabled = false;
+  screenReadBtn.classList.remove("active");
+  window.windowCtl?.restore();
+  setState("idle");
+}
+
+
+// ===== Incognito (hide taskbar/tray + block screen capture; keep app visible) =====
 function setIncognitoUI(on) {
 
   if (!incognitoToggle) return;
@@ -1842,8 +1940,7 @@ if (incognitoToggle && window.electron?.invoke) {
 
 
 
-// --- User session badge + logout ---
-
+// ===== User session badge + logout =====
 async function hydrateUserChip() {
 
   if (!userChip || !window.electron?.invoke) return;
@@ -1950,45 +2047,44 @@ document.addEventListener("click", (e) => {
 
 });
 
-
-
-//--------------------------------------------------
-
 // HANDLE OCR TEXT RETURNED FROM main.js
-
-//--------------------------------------------------
-
-// ---------------- OCR → Transcript + AI ----------------
-window.electron.on("ocr:text", async (_event, textRaw) => {
+// ===== OCR → Transcript + AI (invoke-based) =====
+async function processOcrText(textRaw) {
   try {
-    // Ensure valid text
     if (!textRaw || typeof textRaw !== "string") {
       appendLog("[screen] invalid or null OCR textRaw");
-      console.log("[screen] OCR received invalid payload:", textRaw);
+      debugLog("[screen] OCR received invalid payload:", textRaw);
       return;
     }
 
     const text = textRaw.trim();
     if (!text || text.length < 2) {
       appendLog("[screen] OCR returned empty - no AI call");
-      console.log("[screen] ocr empty textRaw", textRaw);
+      debugLog("[screen] ocr empty textRaw", textRaw);
       return;
     }
 
     const normalized = normalizeCapturedText(text);
-    console.log("[screen] normalized OCR text", normalized);
+    debugLog("[screen] normalized OCR text", normalized);
 
     if (!normalized) {
-      console.log("[screen] normalized text empty, skipping transcript");
+      debugLog("[screen] normalized text empty, skipping transcript");
       return;
     }
 
+    if (normalized === lastScreenReadContext) {
+      debugLog("[screen] OCR text identical to previous run, skipping duplicate append");
+      return;
+    }
+    lastScreenReadContext = normalized;
+
+    // Replace transcript textarea with current capture
     if (liveTranscript) {
-      const existing = (liveTranscript.value || "").trim();
-      liveTranscript.value = (existing ? existing + "\n\n" : "") + normalized;
+      liveTranscript.value = normalized;
       liveTranscript.scrollTop = liveTranscript.scrollHeight;
     }
 
+    // Push into chat input as the new prompt
     if (chatInput) {
       chatInput.value = normalized;
       chatInput.focus();
@@ -2001,7 +2097,8 @@ window.electron.on("ocr:text", async (_event, textRaw) => {
     window.windowCtl?.restore();
     setState("idle");
   }
-});
+}
+
 
 
 
@@ -2137,11 +2234,7 @@ function resetSpeechQueue() {
 }
 
 
-// ======================================================
-
-//   Companion / Live Mode Transcription Listener
-
-// ======================================================
+// ===== Companion / Live Mode Transcription Listener =====
 
 window.electron.on("live:chunk", (_e, text) => {
 
@@ -2255,8 +2348,7 @@ window.electron?.on('answer:stream-error', (_event, payload) => {
 
 
 
-// ------------------ Config / Devices (optional UI) ------------------
-
+// ===== Config / Devices (optional UI) =====
 const selDevice  = $('#soxDevice');
 
 const inpGain    = $('#gainDb');
@@ -2379,8 +2471,7 @@ on(btnTest, 'click', async () => {
 
 
 
-// --- Live Companion UX wiring ---
-
+// ===== Live Companion UX wiring =====
 const companionAPI = window.companion;
 
 
@@ -2519,8 +2610,7 @@ if (companionAPI || window.electron?.invoke) {
 
 
 
-// ------------------ Chat + Doc QA (file ingest + chat-to-answer) ------------------
-
+// ===== Chat + Doc QA (file ingest + chat-to-answer) =====
 const fileBtn   = $('#fileBtn');
 
 const docInput  = $('#docInput');
@@ -2552,11 +2642,7 @@ on(docBadge, 'click', async () => {
   if (docBadge) docBadge.textContent = '';
 
 });
-
-// CHAT INPUT HANDLER (ENTER KEY)
-// =====================================================
-// CHAT INPUT HANDLER (ENTER KEY)
-// =====================================================
+// ===== Chat Input Handler (Enter Key) =====
 on(chatInput, 'keydown', async (e) => {
   if (e.key === 'Enter') {
     const val = chatInput.value.trim();
@@ -2594,10 +2680,7 @@ on(chatInput, 'input', () => {
 
 on(chatInput, 'focus', () => revealPanels());
 
-
-// =====================================================
-// CHAT SEND BUTTON
-// =====================================================
+// ===== Chat Send Button =====
 on(chatSend, 'click', async () => {
   const val = chatInput.value.trim();
   if (!val) return;
@@ -2682,8 +2765,7 @@ on(docInput, 'change', async () => {
 
 
 
-// ------------------ Pre-recorded ------------------
-
+// ===== Pre-recorded =====
 const pickAudioBtn  = $('#pickAudioBtn');
 
 const transcribeBtn = $('#transcribeBtn');
@@ -2755,8 +2837,7 @@ renderAnswersVirtualized();
 
 
 
-// ------------------ Init ------------------
-
+// ===== Init =====
 (async function init(){
 
   if (selDevice || inpGain || inpChunk) {
@@ -2791,8 +2872,7 @@ renderAnswersVirtualized();
 
 
 
-// --- Screen Read Context Memory ---
-
+// ===== Screen Read Context Memory =====
 let lastScreenReadContext = "";
 
 
@@ -2863,7 +2943,7 @@ async function sendSessionSummary() {
   const wordCount = countWords(transcriptText);
   const answersText = document.getElementById("liveAnswer")?.innerText?.trim() || "";
 
-  console.log("DEBUG __turns BEFORE SUMMARY →", __turns);
+  debugLog("DEBUG __turns BEFORE SUMMARY →", __turns);
 
   // ✅ FIXED GUARD — allow index.html or indexRoot.html
   if (!window.location.pathname.includes("index")) {

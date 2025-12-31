@@ -1,10 +1,8 @@
-// ------------------------------------------------------------
-// unifiedAsk.js — CLEANED version (variable names unchanged)
-// ------------------------------------------------------------
+// ===== Unified Ask (adaptive prompt wrapper) =====
 const { loadMemory, saveMemory } = require("./memoryManager");
 const { routeToLLM } = require("./llmRouter");
 
-// ----------------- Adaptive Memory Load ---------------------
+// ===== Adaptive memory load =====
 if (!global.__HALORYN_HISTORY__) {
   global.__HALORYN_HISTORY__ = [];
 }
@@ -12,7 +10,7 @@ const history = global.__HALORYN_HISTORY__;
 
 let longTermMemory = loadMemory();
 
-// ----------------- Emotion Detector --------------------------
+// ===== Emotion detection =====
 function detectEmotion(text) {
   const t = text.toLowerCase();
   if (/angry|mad|upset|irritated|frustrated/.test(t)) return "angry";
@@ -22,7 +20,7 @@ function detectEmotion(text) {
   return "neutral";
 }
 
-// ----------------- Preference Extractor ----------------------
+// ===== Preference extractor =====
 function extractPreferences(text) {
   const prefs = {};
   const t = text.toLowerCase();
@@ -34,7 +32,7 @@ function extractPreferences(text) {
   return prefs;
 }
 
-// ----------------- Summarizer -------------------------------
+// ===== Summaries =====
 function summarizeHistory(history) {
   const joined = history
     .map(m => `${m.role}: ${String(m.content || "")}`)
@@ -46,29 +44,27 @@ function summarizeHistory(history) {
   return joined;
 }
 
-// ------------------------------------------------------------
-//            THE MAIN FUNCTION — unifiedAsk()
-// ------------------------------------------------------------
+// ===== Primary entrypoint =====
 async function unifiedAsk(promptText) {
   try {
     const userPrompt = String(promptText || "").trim();
     if (!userPrompt) return;
 
-    // ------------- Update short-term memory ------------------
-history.push({
-  role: "user",
-  content: String(promptText || "").trim()
-});
+    // Update short-term memory
+    history.push({
+      role: "user",
+      content: String(promptText || "").trim()
+    });
     if (history.length > 20) history.shift();
 
-    // ------------- Adaptive Memory Update --------------------
+    // Adaptive memory update
     const emotion = detectEmotion(userPrompt);
     longTermMemory.lastEmotion = emotion;
 
     const prefs = extractPreferences(userPrompt);
     longTermMemory.preferences = { ...longTermMemory.preferences, ...prefs };
 
-    // ------------- Build adaptive system prompt --------------
+    // Build adaptive system prompt
     const adaptiveSystem = `
 You are Haloryn — an advanced adaptive AI.
 Tone: ${longTermMemory.lastEmotion}
@@ -89,42 +85,40 @@ Rules:
       finalSystem = finalSystem.slice(-1000);
     }
 
-    // ----------------- Compose full LLM messages -------------
+    // Compose full LLM messages
     const conversationalPrompt = {
       messages: [
         { role: "system", content: finalSystem },
         ...history
       ]
     };
-    // -------------------------------------
-// Prepare params for router
-// -------------------------------------
-const searchResults = [];
-const locationForLLM = null;
-    // ----------------- Call LLM Router ------------------------
-const answer = await routeToLLM(
-  sanitizeMessages(conversationalPrompt.messages),
-  searchResults,
-  locationForLLM,
-  promptText,
-  {
-    noCode: true,
-    maxLen: Infinity
-  }
-);
 
+    // Router params
+    const searchResults = [];
+    const locationForLLM = null;
 
+    // Call LLM router
+    const answer = await routeToLLM(
+      sanitizeMessages(conversationalPrompt.messages),
+      searchResults,
+      locationForLLM,
+      promptText,
+      {
+        noCode: true,
+        maxLen: Infinity
+      }
+    );
 
-    // ----------------- Record assistant response --------------
+    // Record assistant response
     if (answer && answer.trim()) {
-history.push({
-  role: "assistant",
-  content: String(answer || "").trim()
-});
+      history.push({
+        role: "assistant",
+        content: String(answer || "").trim()
+      });
       if (history.length > 20) history.shift();
     }
 
-    // ----------------- Update long-term memory ----------------
+    // Update long-term memory
     longTermMemory.historySummary = summarizeHistory(history);
     saveMemory(longTermMemory);
 
@@ -149,4 +143,3 @@ function sanitizeMessages(messages) {
 
     }));
 }
-

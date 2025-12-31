@@ -1,7 +1,5 @@
-// =====================================================
-// intentClassifier.js — Phase 8
+// ===== Intent Classifier (Phase 8) =====
 // Determines if query should go Web-first, Doc-first, or Hybrid
-// =====================================================
 
 /**
  * Rules:

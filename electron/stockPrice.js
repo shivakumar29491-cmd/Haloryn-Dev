@@ -1,7 +1,8 @@
+// ===== Stock Price Helper =====
 const fetch = require("node-fetch");
 
 /**
- * Fetches the latest market price for a ticker from Yahoo's public quote endpoint.
+ * Fetch the latest market price for a ticker from Yahoo's public quote endpoint.
  * Returns { price, currency, name, ticker } or null if unavailable.
  */
 async function getStockQuote(ticker) {

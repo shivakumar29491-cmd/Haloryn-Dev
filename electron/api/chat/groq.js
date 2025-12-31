@@ -1,4 +1,4 @@
-// api/chat/groq.js
+// ===== Groq Chat API handler =====
 const Groq = require("groq-sdk");
 
 module.exports = async function handler(req, res) {

@@ -1,78 +1,69 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Haloryn — Activity</title>
-<link rel="stylesheet" href="./styles/activity.css" />
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
-</head>
+  <head>
+    <meta charset="utf-8" />
+    <title>Haloryn — Activity</title>
+    <link rel="stylesheet" href="./styles/activity.css" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    />
+  </head>
 
-<body>
-  <div id="activityWrapper" class="activity-wrapper">
-
-    <!-- HERO -->
-    <div class="activity-hero">
-      <div class="hero-content">
-        <div class="hero-left">
-          <h2 class="hero-title">Activity Timeline</h2>
-          <p class="hero-subtitle" id="welcomeLine">Welcome back</p>
-        </div>
-        <div class="hero-actions">
-          <button id="startSessionBtn" class="start-btn hero-start">Start Session</button>
-          <div class="hero-user-wrapper">
-            <button class="hero-user-chip" id="activityUserChip">
-              <div class="chip-text">
-                <div class="hero-user-name" id="heroUserName"></div>
-                <div class="hero-user-meta" id="heroUserMeta"></div>
+  <body>
+    <div id="activityWrapper" class="activity-wrapper">
+      <div class="activity-hero">
+        <div class="hero-content">
+          <div class="hero-left">
+            <h2 class="hero-title">Activity Timeline</h2>
+            <p class="hero-subtitle" id="welcomeLine">Welcome back</p>
+          </div>
+          <div class="hero-actions">
+            <button id="startSessionBtn" class="start-btn hero-start">Start Session</button>
+            <div class="hero-user-wrapper">
+              <button class="hero-user-chip" id="activityUserChip">
+                <div class="chip-text">
+                  <div class="hero-user-name" id="heroUserName"></div>
+                  <div class="hero-user-meta" id="heroUserMeta"></div>
+                </div>
+                <span class="chip-chevron">▾</span>
+              </button>
+              <div class="hero-user-menu hidden" id="activityUserMenu">
+                <div class="menu-item" id="activityAccount">Account</div>
+                <div class="menu-item" id="activitySignout">Sign out</div>
               </div>
-              <span class="chip-chevron">▾</span>
-            </button>
-            <div class="hero-user-menu hidden" id="activityUserMenu">
-              <div class="menu-item" id="activityAccount">Account</div>
-              <div class="menu-item" id="activitySignout">Sign out</div>
             </div>
           </div>
         </div>
       </div>
+
+      <div class="card-row">
+        <div id="recentChatsRow">
+          <span id="recentChatsLabel">Recent Chats</span>
+          <div id="historyControlsInline">
+            <select id="historyRange">
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="week">Last Week</option>
+              <option value="all">All</option>
+            </select>
+            <button id="clearHistoryBtn" title="Clear history">🗑️</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline">
+        <h3>Today</h3>
+        <div id="timeline-today" class="timeline-section"></div>
+
+        <h3>Yesterday</h3>
+        <div id="timeline-yesterday" class="timeline-section"></div>
+
+        <h3>Older</h3>
+        <div id="timeline-older" class="timeline-section"></div>
+      </div>
     </div>
 
-    <!-- QUICK ACTION CARDS (only Recent Chats) -->
-    <div class="card-row">
- <div id="recentChatsRow">
-    <span id="recentChatsLabel">Recent Chats</span>
-
-    <div id="historyControlsInline">
-        <select id="historyRange">
-            <option value="today">Today</option>
-            <option value="yesterday">Yesterday</option>
-            <option value="week">Last Week</option>
-            <option value="all">All</option>
-        </select>
-
-        <button id="clearHistoryBtn" title="Clear history">🗑️</button>
-    </div>
-</div>
-
-</div>
-
-
-
-
-    <!-- TIMELINE -->
-    <div class="timeline">
-      <h3>Today</h3>
-      <div id="timeline-today" class="timeline-section"></div>
-
-      <h3>Yesterday</h3>
-      <div id="timeline-yesterday" class="timeline-section"></div>
-
-      <h3>Older</h3>
-      <div id="timeline-older" class="timeline-section"></div>
-    </div>
-
-  </div>
-
-  <script src="activity.js"></script>
-</body>
+    <script src="activity.js"></script>
+  </body>
 </html>

@@ -1,0 +1,12 @@
+{
+  "name": "native-macos-capture",
+  "version": "1.0.0",
+  "description": "Native macOS screen capture addon",
+  "gypfile": true,
+  "scripts": {
+    "build": "node-gyp rebuild"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.5.0"
+  }
+}

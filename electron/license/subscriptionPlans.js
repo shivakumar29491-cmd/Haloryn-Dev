@@ -1,4 +1,4 @@
-// Placeholder subscription plan IDs until you add real LemonSqueezy products.
+// ===== Subscription plan placeholders =====
 
 module.exports = {
     monthly: {

@@ -1,6 +1,8 @@
-﻿const fetch = require("node-fetch");
+// ===== LLM Router =====
+const fetch = require("node-fetch");
 const { groqFastAnswer } = require("./groqEngine");
 
+// ===== Routing heuristics =====
 const COMPLEX_PATTERNS = [
   /\b(debug|bug|stack trace|error code)\b/i,
   /\b(regex|sql|database|query)\b/i,
@@ -17,7 +19,12 @@ function isComplexQuestion(prompt = "") {
   return COMPLEX_PATTERNS.some((re) => re.test(text));
 }
 
-const LOCATION_HINTS = [/\\b(weather|temperature|rain|storm)\\b/i, /\\b(time|today|tonight|current|now)\\b/i, /\\b(nearby|near me|restaurants?|hotels?)\\b/i, /\\b(news|headline|breaking)\\b/i];
+const LOCATION_HINTS = [
+  /\b(weather|temperature|rain|storm)\b/i,
+  /\b(time|today|tonight|current|now)\b/i,
+  /\b(nearby|near me|restaurants?|hotels?)\b/i,
+  /\b(news|headline|breaking)\b/i
+];
 
 function formatLocation(location) {
   if (!location) return "";
@@ -64,7 +71,7 @@ function buildStructuredPrompt(userPrompt, searchResults, location, includeLocat
   return parts.filter(Boolean).join("\n\n");
 }
 
-function cleanAnswer(answer, maxLen = Infinity){
+function cleanAnswer(answer, maxLen = Infinity) {
   let out = String(answer || "").trim();
   if (!out) return "I couldn't generate an answer.";
 
@@ -182,34 +189,27 @@ async function routeToLLM(
 ) {
   const lastMsg = messages?.[messages.length - 1];
   const prompt = lastMsg?.content?.trim() || "";
-
-  const noCode = opts?.noCode ?? false;
   const maxLen = opts?.maxLen ?? Infinity;
 
   if (!prompt) return "Please provide a prompt.";
 
-  // Groq format — ALWAYS only latest message
-  const llmInput = [{ role: "user", content: prompt }];
-
   const needsDeepSeek = isComplexQuestion(prompt);
   let answer = "";
 
- const safe = sanitizeMessages(messages);
-const flat = buildPromptFromMessages(safe);
+  const safeMessages = sanitizeMessages(messages);
+  const flatPrompt = buildPromptFromMessages(safeMessages);
 
-if (needsDeepSeek) {
-    answer = await askDeepSeek(flat);
-    if (!answer) answer = answer = await groqFastAnswer(flat);
+  if (needsDeepSeek) {
+    answer = await askDeepSeek(flatPrompt);
+    if (!answer) {
+      answer = await groqFastAnswer(flatPrompt);
+    }
+  } else {
+    answer = await groqFastAnswer(flatPrompt);
+  }
 
-} else {
-    answer = aanswer = await groqFastAnswer(flat);
-
-}
-
-if (!answer) answer = await askDeepSeek(flat);
-if (!answer) answer = await askOpenAI(flat);
-
-
+  if (!answer) answer = await askDeepSeek(flatPrompt);
+  if (!answer) answer = await askOpenAI(flatPrompt);
 
   return cleanAnswer(answer || "I couldn't generate an answer.", maxLen);
 }

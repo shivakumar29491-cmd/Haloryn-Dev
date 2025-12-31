@@ -26,13 +26,38 @@ function getTmpDir() {
 }
 
 // Capture the primary screen to a PNG file and return its path
-async function captureScreenToPng() {
+async function captureScreenToPng(region) {
+  const { desktopCapturer, screen } = require('electron');
+  const fs = require('fs');
+  const path = require('path');
+
   const dir = getTmpDir();
   const file = path.join(dir, `screen_${Date.now()}.png`);
-  log(`[screen] capturing to ${file}`);
-  await screenshot({ filename: file });
+
+  // 1. Get primary display size (Retina-safe)
+  const primary = screen.getPrimaryDisplay();
+  const { width, height } = primary.size;
+
+  // 2. Ask Electron to capture the screen
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width, height }   // FULL resolution
+  });
+
+  const source = sources[0];
+  let img = source.thumbnail;
+
+  // 3. Crop to region
+  if (region) {
+    const { x, y, width, height } = region;
+    img = img.crop({ x, y, width, height });
+  }
+
+  // 4. Save
+  fs.writeFileSync(file, img.toPNG());
   return file;
 }
+
 
 // Run Tesseract on the PNG and return extracted text
 function runTesseract(pngPath) {
@@ -42,7 +67,15 @@ function runTesseract(pngPath) {
   const lang = process.env.TESS_LANG || 'eng';
 
   return new Promise((resolve, reject) => {
-    const args = [pngPath, outBase, '-l', lang];
+    const args = [
+      pngPath,
+      outBase,
+      '-l', lang,
+      '--psm', '6',      // ⭐ Best for multiline text
+      '--oem', '1',      // ⭐ LSTM OCR engine
+      '--dpi', '300',    // ⭐ Treat image as high resolution
+    ];
+
     log(`[screen] running: ${tessBin} ${args.join(' ')}`);
 
     let child;
@@ -68,22 +101,39 @@ function runTesseract(pngPath) {
 }
 
 // Initialize IPC handler
-function initScreenReader({ ipcMain, log }) {
+async function initScreenReader({ ipcMain, log }) {
   logFn = typeof log === 'function' ? log : null;
   if (!ipcMain) return;
 
   ipcMain.handle('screen:readOnce', async () => {
     try {
+      // 1. Capture raw PNG
       const pngPath = await captureScreenToPng();
-      const text = await runTesseract(pngPath);
+
+      // 2. Load & upscale PNG (2x resolution for sharper text)
+      const upscaledPngPath = await upscalePngForOCR(pngPath);
+
+      // 3. Run optimized Tesseract
+      const text = await runTesseract(upscaledPngPath);
+
       log(`[screen] OCR complete (${text.length} chars)`);
       return { ok: true, text };
+
     } catch (err) {
-      const msg = err && err.message ? err.message : String(err);
+      const msg = err?.message || String(err);
       log(`[screen] ERROR: ${msg}`);
       return { ok: false, error: msg };
     }
   });
+}
+async function upscalePngForOCR(pngPath) {
+  const outPath = pngPath.replace(".png", "-x2.png");
+
+  await sharp(pngPath)
+    .resize({ width: null, height: null, fit: "contain", kernel: "lanczos3", multiplier: 2 })
+    .toFile(outPath);
+
+  return outPath;
 }
 
 module.exports = {

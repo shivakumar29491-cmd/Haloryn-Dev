@@ -1,7 +1,4 @@
-// =====================================================
-// groqApi.js — Search Provider for Phase 8
-// Makes Groq behave like Bing/Brave/SerpAPI
-// =====================================================
+// ===== Groq search provider (Phase 8) =====
 
 const Groq = require("groq-sdk");
 

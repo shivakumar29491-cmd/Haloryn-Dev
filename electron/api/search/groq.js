@@ -1,4 +1,4 @@
-// api/search/groq.js
+// ===== Groq quick-answer search handler =====
 const Groq = require("groq-sdk");
 const { normalizeSearchResults } = require("../utils/formatter");
 

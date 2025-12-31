@@ -1,21 +1,19 @@
-// =====================================================
-// Haloryn — main.js (Recorder + Whisper + Chat + Doc QA + Live Companion)
-// Phase 5.11–5.15 updates included + Brave API wiring
-// =====================================================
-/*
-  © 2025 iMSK Consultants LLC — Haloryn AI
-  All Rights Reserved.
-*/
+// ===== Haloryn Main Process =====
+// Recorder + Whisper + Chat + Doc QA + Live Companion
 
-// =====================================================
-// IMPORTS + ENV SETUP (CLEAN + NO DUPLICATES)
-// =====================================================
+// ===== Imports & Environment Setup =====
 
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
+let autoUpdater = null;
+try {
+  autoUpdater = require("electron-updater").autoUpdater;
+} catch (err) {
+  console.warn("[autoUpdate] electron-updater unavailable:", err.message);
+}
 
 // Try multiple .env locations so packaged builds still pick up secrets
 const envPaths = [];
@@ -28,8 +26,6 @@ for (const envPath of envPaths) {
     break;
   }
 }
-console.log(">>> USING THIS MAIN.JS <<<");
-
 const {
   app,
   BrowserWindow,
@@ -40,14 +36,16 @@ const {
   Tray,
   nativeImage,
   screen,
-  desktopCapturer
+  desktopCapturer,
+  systemPreferences
 } = require("electron");
 require("./ipc/licenseIPC");
+const { initTranscription, transcribeAudio } = require("./transcriptionManager");
 
 global.IS_PACKAGED = app.isPackaged;
 
 // Minimal debug logger guard (no console output by default).
-const debugLog = () => {};
+const debugLog = (..._args) => {};
 
 function safeChdir(dir) {
   try {
@@ -60,6 +58,7 @@ function safeChdir(dir) {
   }
 }
 
+// ===== Screen Region Storage =====
 const SCREEN_REGION_FILE = path.join(app.getPath("userData"), "screen-region.enc");
 const SCREEN_REGION_KEY = crypto
   .createHash("sha256")
@@ -116,6 +115,22 @@ function persistRegion(region) {
   }
 }
 
+function normalizeAudioBuffer(payload) {
+  if (!payload) return null;
+  if (Buffer.isBuffer(payload)) return payload;
+  if (typeof ArrayBuffer !== "undefined" && payload instanceof ArrayBuffer) {
+    return Buffer.from(payload);
+  }
+  if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView && ArrayBuffer.isView(payload)) {
+    return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+  }
+  if (payload?.type === "Buffer" && Array.isArray(payload?.data)) {
+    return Buffer.from(payload.data);
+  }
+  return null;
+}
+
+// ===== Screen Region IPC =====
 ipcMain.handle("screenread:get-region", () => {
   return { ok: true, region: loadStoredRegion() };
 });
@@ -138,90 +153,148 @@ ipcMain.handle("screenread:launch-app", (_e, command) => {
   }
 });
 
-let screenOverlayWindow = null;
-let screenOverlayPending = null;
+// ===== Region Tool Overlay =====
+let regionToolWindow = null;
+let regionToolPending = null;
+let regionToolDisplayBounds = null;
+let regionToolInitialRegion = null;
 
-function finalizeScreenOverlay(result) {
-  if (!screenOverlayPending) return;
-  const resolver = screenOverlayPending.resolve;
-  screenOverlayPending = null;
-  if (resolver) resolver(result);
+function cleanupRegionTool(payload) {
+  if (regionToolPending) {
+    const resolve = regionToolPending;
+    regionToolPending = null;
+    try {
+      resolve(payload);
+    } catch (err) {
+      console.warn("[screenread] region tool resolver failed", err);
+    }
+  }
+
+  regionToolInitialRegion = null;
+  regionToolDisplayBounds = null;
+
+  const overlay = regionToolWindow;
+  regionToolWindow = null;
+
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.removeAllListeners("closed");
+    try {
+      overlay.close();
+    } catch {}
+  }
 }
 
-ipcMain.on("screenread:selection", (_event, region) => {
-  console.log("[screenread] selection received", region);
-  finalizeScreenOverlay({ ok: true, region });
+function sendRegionToolInit() {
+  if (!regionToolWindow || regionToolWindow.isDestroyed()) return;
+  regionToolWindow.webContents.send("region-tool:init", {
+    displayBounds: regionToolDisplayBounds,
+    initialRegion: regionToolInitialRegion
+  });
+}
+
+ipcMain.on("region-tool:ready", (event) => {
+  if (!regionToolWindow || event.sender !== regionToolWindow.webContents) return;
+  sendRegionToolInit();
 });
 
-ipcMain.on("screenread:selection-cancel", () => {
-  console.log("[screenread] selection canceled");
-  finalizeScreenOverlay({ ok: false, error: "canceled" });
+ipcMain.on("region-tool:confirm", (_event, region) => {
+  if (
+    !region ||
+    typeof region.x !== "number" ||
+    typeof region.y !== "number" ||
+    region.width < 4 ||
+    region.height < 4
+  ) {
+    cleanupRegionTool({ ok: false, error: "invalid region" });
+    return;
+  }
+
+  const offsetX = regionToolDisplayBounds?.x || 0;
+  const offsetY = regionToolDisplayBounds?.y || 0;
+  const normalized = {
+    x: Math.round(region.x + offsetX),
+    y: Math.round(region.y + offsetY),
+    width: Math.round(region.width),
+    height: Math.round(region.height)
+  };
+
+  cleanupRegionTool({ ok: true, region: normalized });
+});
+
+ipcMain.on("region-tool:cancel", () => {
+  cleanupRegionTool({ ok: false, error: "canceled" });
 });
 
 ipcMain.handle("screenread:open-overlay", async (_event, initialRegion) => {
-  if (screenOverlayPending) {
+  if (regionToolPending) {
     return { ok: false, error: "overlay busy" };
   }
 
   const target = BrowserWindow.getFocusedWindow() || win;
-  const anchorBounds = target && !target.isDestroyed() ? target.getBounds() : { x: 0, y: 0 };
+  const anchorBounds =
+    target && !target.isDestroyed() ? target.getBounds() : { x: 0, y: 0 };
   const display =
-    screen.getDisplayNearestPoint({ x: anchorBounds.x, y: anchorBounds.y }) || screen.getPrimaryDisplay();
+    screen.getDisplayNearestPoint({
+      x: anchorBounds.x,
+      y: anchorBounds.y
+    }) || screen.getPrimaryDisplay();
 
-  console.log("[screenread] overlay request", { displayId: display?.id, initialRegion });
+  regionToolDisplayBounds = display?.bounds || { x: 0, y: 0, width: 0, height: 0 };
+  regionToolInitialRegion = initialRegion || null;
 
-  screenOverlayWindow = new BrowserWindow({
-    x: display.bounds.x,
-    y: display.bounds.y,
-    width: display.bounds.width,
-    height: display.bounds.height,
+  regionToolWindow = new BrowserWindow({
+    x: regionToolDisplayBounds.x,
+    y: regionToolDisplayBounds.y,
+    width: regionToolDisplayBounds.width,
+    height: regionToolDisplayBounds.height,
     frame: false,
     transparent: true,
-    movable: false,
-    resizable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    focusable: true,
+    backgroundColor: "#00000000",
     hasShadow: false,
+    resizable: false,
+    movable: false,
+    focusable: true,
+    skipTaskbar: true,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    show: false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      backgroundThrottling: false
+      preload: path.join(__dirname, "renderer/regionToolPreload.js"),
+      contextIsolation: true
     }
   });
 
-  screenOverlayWindow.setMenuBarVisibility(false);
-  screenOverlayWindow.setAlwaysOnTop(true, "screen-saver");
-
-  screenOverlayPending = {
-    resolve: null
-  };
+  regionToolWindow.setAlwaysOnTop(true, "screen-saver");
+  regionToolWindow.setVisibleOnAllWorkspaces(true);
 
   const promise = new Promise((resolve) => {
-    screenOverlayPending.resolve = resolve;
+    regionToolPending = resolve;
   });
 
-  screenOverlayWindow.on("closed", () => {
-    screenOverlayWindow = null;
-    if (screenOverlayPending) {
-      const closeResolver = screenOverlayPending.resolve;
-      screenOverlayPending = null;
-      if (closeResolver) closeResolver({ ok: false, error: "overlay closed" });
-    }
+  regionToolWindow.on("closed", () => {
+    cleanupRegionTool({ ok: false, error: "overlay closed" });
   });
 
-  await screenOverlayWindow.loadFile(path.join(__dirname, "snipOverlay.html"));
-
-  screenOverlayWindow.once("ready-to-show", () => {
-    if (screenOverlayWindow) {
-      screenOverlayWindow.show();
-      screenOverlayWindow.focus();
-    }
-  });
+  await regionToolWindow.loadFile(path.join(__dirname, "renderer/regionTool.html"));
+  regionToolWindow.showInactive();
 
   return promise;
 });
+
+const sharp = require("sharp");
+
+async function normalizeMacImage(base64) {
+  const buffer = Buffer.from(base64, "base64");
+  const meta = await sharp(buffer).metadata();
+  const scale = meta.density && meta.density > 110 ? 0.5 : 1;
+  return sharp(buffer)
+    .resize({
+      width: Math.round(meta.width * scale),
+      height: Math.round(meta.height * scale)
+    })
+    .png()
+    .toBuffer();
+}
 
 //safeChdir(__dirname);
 
@@ -290,6 +363,9 @@ function readSavedSession() {
 
 setHistoryOwnerFromSession(readSavedSession());
 
+// Initialize Groq transcription engine if key is present
+initTranscription(process.env.GROQ_API_KEY);
+
 let tray = null;
 let incognitoOn = false;
 let answerStreamSeq = 0;
@@ -316,11 +392,15 @@ async function tryFastLocalTranscribe(filePath) {
 }
 
 
-process.env.PATH = [
-  'C:\\Program Files\\sox',
-  'C:\\Program Files (x86)\\sox-14-4-2',
-  process.env.PATH || ''
-].join(';');
+// Only prepend Windows-specific SoX paths on Windows; keep POSIX PATH untouched.
+if (process.platform === 'win32') {
+  const soxCandidates = [
+    'C:\\Program Files\\sox',
+    'C:\\Program Files (x86)\\sox-14-4-2'
+  ];
+  const existingPath = process.env.PATH || '';
+  process.env.PATH = [...soxCandidates, existingPath].filter(Boolean).join(path.delimiter);
+}
 /*
   © 2025 iMSK Consultants LLC — Haloryn AI
   All Rights Reserved.
@@ -486,14 +566,133 @@ ipcMain.handle("load-activity", async () => {
 });
 
 
-// ---------------- Window ----------------
+// ===== Window Management =====
 let win;
-
 
 function send(ch, payload) {
   if (win && !win.isDestroyed()) {
     try { win.webContents.send(ch, payload); } catch {}
   }
+}
+
+async function ensureMicrophonePermission() {
+  // macOS supports explicit prompts; other platforms rely on system dialogs when the recorder launches
+  if (process.platform === 'darwin' && systemPreferences) {
+    const canCheck = typeof systemPreferences.getMediaAccessStatus === 'function';
+    const canRequest = typeof systemPreferences.askForMediaAccess === 'function';
+
+    if (!canCheck || !canRequest) {
+      return { granted: true };
+    }
+
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    if (status === 'granted') return { granted: true };
+
+    try {
+      send('log', '[mic] requesting macOS microphone access');
+      const granted = await systemPreferences.askForMediaAccess('microphone');
+      if (!granted) {
+        const detail = 'Haloryn needs microphone access. Grant it via System Settings → Privacy & Security → Microphone.';
+        dialog.showMessageBox({
+          type: 'warning',
+          message: 'Microphone permission required',
+          detail,
+          buttons: ['OK']
+        });
+        return { granted: false, error: detail };
+      }
+      return { granted: true };
+    } catch (err) {
+      send('log', `[mic] request failed: ${err.message}`);
+      return { granted: false, error: err.message };
+    }
+  }
+
+  // For Windows/Linux we rely on OS prompts presented when recording starts
+  return { granted: true };
+}
+
+function initAutoUpdater() {
+  if (!autoUpdater) {
+    console.warn("[autoUpdate] module missing; skipping updater init.");
+    return;
+  }
+  if (!app.isPackaged) {
+    send('log', '[autoUpdate] dev build detected; auto-update disabled.');
+    return;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  const feedUrl = (process.env.AUTO_UPDATE_URL || process.env.HALORYN_UPDATE_URL || '').trim();
+  if (feedUrl) {
+    try {
+      autoUpdater.setFeedURL({ url: feedUrl });
+      send('log', `[autoUpdate] Custom feed set: ${feedUrl}`);
+    } catch (err) {
+      send('log', `[autoUpdate] Failed to set custom feed: ${err.message}`);
+    }
+  }
+
+  autoUpdater.on('error', (err) => {
+    send('log', `[autoUpdate:error] ${err?.message || err}`);
+  });
+
+  autoUpdater.on('checking-for-update', () => {
+    send('log', '[autoUpdate] Checking for updates...');
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    send('log', '[autoUpdate] No updates found (stable channel).');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    const message = `Version ${info?.version || ''} is available. You are on ${app.getVersion()}.`;
+    send('log', `[autoUpdate] Update available: ${info?.version || 'unknown'}`);
+    const parent = win && !win.isDestroyed() ? win : undefined;
+    dialog.showMessageBox(parent, {
+      type: 'info',
+      buttons: ['Download', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update available',
+      message: 'A new Haloryn build is ready.',
+      detail: `${message}\nDownload now?`
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.downloadUpdate().catch((err) => {
+          send('log', `[autoUpdate] download failed: ${err.message}`);
+        });
+      }
+    }).catch(() => {});
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    send('log', `[autoUpdate] Update downloaded: ${info?.version || 'unknown'}`);
+    const parent = win && !win.isDestroyed() ? win : undefined;
+    dialog.showMessageBox(parent, {
+      type: 'question',
+      buttons: ['Restart & Install', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update ready',
+      message: 'Haloryn update downloaded',
+      detail: 'Restart now to install the latest stable build?'
+    }).then(({ response }) => {
+      if (response === 0) {
+        setImmediate(() => {
+          autoUpdater.quitAndInstall();
+        });
+      }
+    }).catch(() => {});
+  });
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      send('log', `[autoUpdate] initial check failed: ${err.message}`);
+    });
+  }, 4000);
 }
 app.setAppUserModelId("Haloryn");
 safeChdir(__dirname);
@@ -697,6 +896,7 @@ function initSearchEngines() {
 app.whenReady().then(() => {
   initSearchEngines(); // NEW: wire Brave on boot
   createWindow();
+  initAutoUpdater();
   try {
     globalShortcut.register('CommandOrControl+Shift+Space', () => {
       if (!win) return;
@@ -707,7 +907,7 @@ app.whenReady().then(() => {
 app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch {} });
 app.on('window-all-closed', () => app.quit());
 
-// ---------------- Whisper (tuned for speed) ----------------
+// ===== Whisper (tuned for speed) =====
 const WHISPER_BIN     = process.env.WHISPER_BIN     || 'C:\\dev\\whisper.cpp\\build\\bin\\Release\\whisper-cli.exe';
 const WHISPER_MODEL   = process.env.WHISPER_MODEL   || 'C:\\dev\\whisper.cpp\\models\\ggml-tiny.en.bin'; // fastest sensible default
 // Fewer threads by default to reduce CPU spikes on live/companion
@@ -771,7 +971,7 @@ async function runWhisper(filePath){
   });
 }
 
-// ---------------- Web utils (legacy DuckDuckGo helpers, backup only) ----------------
+// ===== Web utils (legacy DuckDuckGo helpers, backup only) =====
 async function duckDuckGoSearch(query, maxResults = 5) {
   const q = encodeURIComponent(query);
   const url = `https://html.duckduckgo.com/html/?q=${q}`;
@@ -834,7 +1034,7 @@ function extractiveSummary(text, query, maxSentences = 6) {
   return chosen.length ? chosen.join(' ') : sents.slice(0, maxSentences).join(' ').trim();
 }
 
-// ---------------- Answering state/funcs ----------------
+// ===== Answering state/funcs =====
 let docContext = { name:'', text:'', tokens:null };
 let webPlus   = false;   // backend flag (UI removed)
 let useDoc    = false;   // default OFF so answers are AI-only
@@ -1133,11 +1333,7 @@ Write one cohesive answer. If you use web info, reflect it clearly.`;
   } catch (err) {
     send("log", `[OpenAI Exception] ${err.message}`);
   }
-
-  // --------------------
   // CLOUD FALLBACK
-  // --------------------
-
   // Brave summary
   try {
     const brave = await braveWebSummary(question, 5);
@@ -1176,10 +1372,7 @@ Write one cohesive answer. If you use web info, reflect it clearly.`;
 // Phase 5.12 — Doc-enrichment mode: doc-first then web
 async function docEnrichAnswer(question, text) {
   const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
-
-  // -------------------------------
   // PHASE A: DOC-FIRST (OpenAI only)
-  // -------------------------------
   let docPart = '';
 
   if (hasOpenAIKey) {
@@ -1189,10 +1382,7 @@ async function docEnrichAnswer(question, text) {
     const summary = extractiveSummary(text, question, 6);
     docPart = summary || `I couldn't find this in the document.`;
   }
-
-  // -------------------------------
   // PHASE B: WEB ENRICHMENT
-  // -------------------------------
   const results = await cachedSmartSearch(question, {
     maxResults: 4,
     log: (line) => send("log", line)
@@ -1207,11 +1397,8 @@ async function docEnrichAnswer(question, text) {
   }
 
   const webPart = extractiveSummary(webCtx, question, 6);
-
-  // -------------------------------
   // PHASE C: HYBRID FALLBACK
   // If doc lacks answer AND web lacks answer
-  // -------------------------------
   const docEmpty =
     !docPart ||
     /couldn'?t find this in the document/i.test(docPart);
@@ -1227,10 +1414,7 @@ async function docEnrichAnswer(question, text) {
 
     return `I couldn't find enough information in the document or the web to answer this.`;
   }
-
-  // -------------------------------
   // PHASE D: COMBINE DOC + WEB
-  // -------------------------------
   let out = "";
 
   if (docPart) {
@@ -1358,15 +1542,12 @@ async function genericAnswer(userText){
 
 
 // --- Router ---
-// ---------------- CLOUD-ONLY ROUTER (Phase 8) ----------------
+// ===== CLOUD-ONLY ROUTER (Phase 8) =====
 async function answer(userText) {
   const q = (userText || '').trim();
 
   if (!q) return '';
-
-  // --------------------------------------
   // 0) DOC CONTEXT (if attached + enabled)
-  // --------------------------------------
   if (useDoc && docContext.text) {
     try {
       // Try a doc-focused Groq answer first (doc context + question)
@@ -1402,10 +1583,7 @@ async function answer(userText) {
     const summary = extractiveSummary(docContext.text, q, 6);
     if (summary && summary.trim()) return summary.trim();
   }
-
-  // --------------------------------------
   // 1) GROQ FAST ANSWER (PRIMARY ENGINE)
-  // --------------------------------------
   try {
     const fast = await groqFastAnswer(q);
 
@@ -1419,10 +1597,7 @@ async function answer(userText) {
   } catch (err) {
     send("log", `[Groq fast error] ${err.message}`);
   }
-
-  // --------------------------------------
   // 2) BRAVE FALLBACK (SECOND)
-  // --------------------------------------
   try {
     const brave = await braveWebSummary(q, 5);
 
@@ -1433,10 +1608,7 @@ async function answer(userText) {
   } catch (err) {
     send("log", `[Brave error] ${err.message}`);
   }
-
-  // --------------------------------------
   // 3) ROUTED WEB SEARCH (THIRD FALLBACK)
-  // --------------------------------------
   try {
     const results = await cachedSmartSearch(q, {
       maxResults: 5,
@@ -1461,10 +1633,7 @@ async function answer(userText) {
   } catch (err) {
     send("log", `[Router error] ${err.message}`);
   }
-
-  // --------------------------------------
   // 4) OPENAI FINAL RESCUE FALLBACK
-  // --------------------------------------
   if (process.env.OPENAI_API_KEY) {
     try {
       send("log", "[OpenAI] Using final fallback.");
@@ -1499,16 +1668,13 @@ async function answer(userText) {
       send("log", `[OpenAI fallback error] ${err.message}`);
     }
   }
-
-  // --------------------------------------
   // 5) ABSOLUTE LAST RETURN
-  // --------------------------------------
   return `I couldn't find information for "${q}".`;
 }
 
 
 
-// --------------- Live / question classifiers (5.13) ---------------
+// ===== Live / question classifiers (5.13) =====
 function isQuestion(text) {
   const s = String(text || '');
   return /(\?|^\s*(who|what|why|when|where|which|how|can|could|should|would)\b|please\b)/i.test(s);
@@ -1534,7 +1700,7 @@ async function answerLiveQuestion(text) {
   return await answer(payload);
 }
 
-// ---------------- Paths / Recorder ----------------
+// ===== Paths / Recorder =====
 function tmpDir(){
   const dir=path.join(os.tmpdir(),'haloai');
   if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true});
@@ -1566,7 +1732,7 @@ function recordWithSox(outfile, ms, onDone, device = 'default', gainDb = '0'){
   }
 }
 
-// ---------------- Live + Companion pipeline ----------------
+// ===== Live + Companion pipeline =====
 let live={on:false, idx:0, transcript:''};
 let pendingAnswerTimer = null;
 let pendingAnswerCtx = '';
@@ -1656,6 +1822,29 @@ function stopCompanionTimer(){
   if (companion.timer) { clearInterval(companion.timer); companion.timer = null; }
 }
 
+async function transcribeChunkGroqFirst(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      send('log', `[live] chunk missing: ${filePath}`);
+      return '';
+    }
+    const audioBuffer = await fs.promises.readFile(filePath);
+    if (!audioBuffer?.length) {
+      send('log', `[live] chunk empty: ${filePath}`);
+      return '';
+    }
+
+    send('log', `[live] transcribing chunk (${audioBuffer.length} bytes) via Groq hybrid`);
+    const result = await transcribeAudio(audioBuffer);
+    const text = result?.sanitized?.trim() || result?.raw?.trim() || '';
+    send('log', `[live] transcription source=${result?.source || 'unknown'} chars=${text.length}`);
+    return text;
+  } catch (err) {
+    send('log', `[live] Groq transcribe error: ${err.message}`);
+    return '';
+  }
+}
+
 function startChunk(){
   const dMs=recConfig.chunkMs||1500;
   const thisIdx = live.idx;
@@ -1668,7 +1857,7 @@ function startChunk(){
 
     (async()=>{
       try{
-        const text=(await runWhisper(outfile))||'';
+        const text = (await transcribeChunkGroqFirst(outfile)) || '';
         const normalized = text.replace(/\s+/g,' ').trim();
         if(normalized){
           send('live:chunk', normalized);
@@ -1693,8 +1882,8 @@ function startChunk(){
               pendingAnswerTimer = null;
             }
           }, 2000); // wait for ~2s of silence before answering
-        } else send('log','[whisper] (empty transcript)');
-      }catch(e){ send('log', `[whisper:error] ${e.message}`); }
+        } else send('log','[live] (empty transcript)');
+      }catch(e){ send('log', `[live transcribe error] ${e.message}`); }
     })();
   };
   recordWithSox(outfile,dMs,after, recConfig.device, recConfig.gainDb);
@@ -1789,6 +1978,13 @@ ipcMain.handle("logout:clear", async () => {
 
 // Mirror handlers for Companion overlay API (used by preload.js)
 ipcMain.handle('companion:start', async()=>{
+  const mic = await ensureMicrophonePermission();
+  if (!mic.granted) {
+    const msg = mic.error || 'Microphone permission denied. Enable access in system settings and try again.';
+    send('companion:state','off');
+    send('live:answer', msg);
+    return { ok:false, error: msg };
+  }
   if(live.on){ send('companion:state','on'); return {ok:true}; }
   live={on:true, idx:0, transcript:''};
   companion.lastLen = 0;
@@ -1808,6 +2004,13 @@ ipcMain.handle('companion:stop', async()=>{
   return {ok:true};
 });
 ipcMain.handle('live:start', async()=>{
+  const mic = await ensureMicrophonePermission();
+  if (!mic.granted) {
+    const msg = mic.error || 'Microphone permission denied. Enable access in system settings and try again.';
+    send('companion:state','off');
+    send('live:answer', msg);
+    return { ok:false, error: msg };
+  }
   if(live.on) return {ok:true};
   live={on:true, idx:0, transcript:''};
   companion.lastLen = 0;
@@ -1826,6 +2029,18 @@ ipcMain.handle('live:stop', async()=>{
 });
 // ... existing code above ...
 // FAST transcription using Groq Whisper (Phase 7)
+ipcMain.handle("stt:transcribe", async (_event, audioPayload) => {
+  try {
+    const buffer = normalizeAudioBuffer(audioPayload);
+    if (!buffer) throw new Error("Invalid audio payload");
+    const result = await transcribeAudio(buffer);
+    return { ok: true, ...result };
+  } catch (err) {
+    console.error("[IPC stt:transcribe] Failed:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
   try {
     const text = await groqWhisperTranscribe(audioBuffer);
@@ -1844,78 +2059,46 @@ ipcMain.handle("groq:transcribe", async (_e, audioBuffer) => {
   }
 });*/
 
-// ---------------- Tesseract OCR (primary OCR engine) ----------------
-// ------------- Tesseract OCR (primary OCR engine) ----------------
-// ---------------- Tesseract OCR (stable for v4.0.2) ----------------
-// ------------------ Tesseract OCR — stable for Electron (tesseract.js 4.x) ------------------
-const { createWorker } = require("tesseract.js");
-let ocrWorker = null;
+// ===== OCR (Native Tesseract CLI) =====
 
-async function ensureOcrWorker() {
-  if (ocrWorker) {
-    console.log("[OCR] Reusing existing worker");
-    return ocrWorker;
-  }
+//const { spawn } = require("child_process");
+//const os = require("os");
+//const fs = require("fs");
+//const path = require("path");
 
-  const coreJsPath = require.resolve("tesseract.js-core/tesseract-core.wasm.js");
-  const wasmBinaryPath = require.resolve("tesseract.js-core/tesseract-core.wasm");
-  const corePath = pathToFileURL(coreJsPath).href;
-  const wasmBinaryUrl = pathToFileURL(wasmBinaryPath).href;
-  const langPath = path.join(__dirname, "eng.traineddata");
-  const customWorkerPath = path.join(__dirname, "tesseract-worker", "index.js");
-
-  console.log("[OCR] Bootstrapping worker");
-  console.log("[OCR] corePath:", corePath);
-  console.log("[OCR] wasmBinaryUrl:", wasmBinaryUrl);
-  console.log("[OCR] langPath:", langPath);
-
-  let originalFetch = null;
-  if (typeof globalThis.fetch === "function") {
-    originalFetch = globalThis.fetch;
-    console.log("[OCR] Temporarily disabling global fetch for local assets");
-    globalThis.fetch = undefined;
-  }
-
+// REMOVE tesseract.js references entirely
+// let ocrWorker = null;
+// const { createWorker } = require("tesseract.js");
+//const sharp = require("sharp");
+// --- NEW: Guard against invalid OCR payload BEFORE spawning Tesseract ---
+ipcMain.handle("ocr:validate", async (_event, payload) => {
   try {
-    const worker = createWorker({
-      workerPath: customWorkerPath,
-      corePath,
-      langPath: path.dirname(langPath),
-      locateFile: (file) => {
-        if (file.endsWith("tesseract-core.wasm")) {
-          return wasmBinaryUrl;
-        }
-        return file;
-      }
-    });
-
-    console.log("[OCR] Loading worker...");
-    await worker.load();
-    console.log("[OCR] Worker core loaded");
-    await worker.loadLanguage("eng");
-    console.log("[OCR] Language 'eng' loaded");
-    await worker.initialize("eng");
-    console.log("[OCR] Worker initialized");
-
-    ocrWorker = worker;
-    return worker;
-  } finally {
-    if (originalFetch) {
-      globalThis.fetch = originalFetch;
-      console.log("[OCR] Restored global fetch");
-    }
-  }
-}
-
-
-
-// ------------------ OCR IPC ------------------
-
-ipcMain.on("ocr:image", async (_event, payload) => {
-  try {
-    console.log("[OCR] Received payload for recognition");
-    const worker = await ensureOcrWorker();
     let imgBuffer = null;
+
+    if (Buffer.isBuffer(payload)) {
+      imgBuffer = payload;
+    } else if (typeof payload === "string") {
+      imgBuffer = Buffer.from(payload, "base64");
+    } else if (payload?.base64) {
+      imgBuffer = Buffer.from(payload.base64, "base64");
+    } else if (payload?.data) {
+      imgBuffer = Buffer.from(payload.data);
+    }
+
+    if (!imgBuffer || imgBuffer.length < 1000) {
+      return { ok: false, reason: "empty_or_invalid" };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+});
+
+ipcMain.handle("ocr:image", async (_event, payload) => {
+  try {
+    let imgBuffer = null;
+
     if (Buffer.isBuffer(payload)) {
       imgBuffer = payload;
     } else if (typeof payload === "string") {
@@ -1929,17 +2112,58 @@ ipcMain.on("ocr:image", async (_event, payload) => {
     }
 
     if (!imgBuffer || imgBuffer.length === 0) {
-      throw new Error("invalid OCR payload");
+      return "OCR Error: Invalid OCR payload";
     }
 
-    console.log("[OCR] Buffer size:", imgBuffer.length);
-    const result = await worker.recognize(imgBuffer);
-    console.log("[OCR] Recognition complete, characters:", result?.data?.text?.length || 0);
-    send("ocr:text", result.data?.text || "");
+    const tempFile = path.join(os.tmpdir(), `ocr_${Date.now()}.png`);
+    let finalBuffer = imgBuffer;
+
+    if (process.platform === "darwin") {
+      try {
+        finalBuffer = await sharp(imgBuffer)
+          .resize({
+            width: Math.round((await sharp(imgBuffer).metadata()).width / 2),
+            height: Math.round((await sharp(imgBuffer).metadata()).height / 2)
+          })
+          .png()
+          .toBuffer();
+      } catch (e) {
+        console.warn("[OCR] Failed to downscale Retina image:", e.message);
+      }
+    }
+
+    fs.writeFileSync(tempFile, finalBuffer);
+
+    let tesseractBin = "/usr/local/bin/tesseract";
+    if (process.platform === "win32") {
+      tesseractBin = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
+    }
+
+    const args = [tempFile, "stdout", "-l", "eng"];
+    const proc = spawn(tesseractBin, args);
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+    proc.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+
+    const exitCode = await new Promise((resolve) => {
+      proc.on("close", resolve);
+    });
+
+    fs.unlink(tempFile, () => {});
+
+    if (exitCode !== 0) {
+      console.error("[OCR] ERROR:", stderr);
+      return "OCR Error: " + (stderr || "Unknown error");
+    }
+
+    const text = (stdout || "").trim();
+    return text;
   } catch (err) {
-    const message = err?.message || String(err || "unknown error");
-    console.error("[OCR] Error during recognition:", message);
-    send("ocr:text", "OCR Error: " + message);
+    console.error("[OCR] Exception:", err);
+    return "OCR Error: " + (err?.message || err);
   }
 });
 
@@ -1947,7 +2171,9 @@ ipcMain.on("ocr:image", async (_event, payload) => {
 
 
 
-// ---------------- File mode ----------------
+
+
+// ===== File mode =====
 ipcMain.handle('pick:audio', async()=>{
   const {canceled,filePaths}=await dialog.showOpenDialog({
     properties:['openFile'],
@@ -1960,7 +2186,7 @@ ipcMain.handle('whisper:transcribe', async(_e, p)=>{
   catch(e){ send('log', `[error] ${e.message}`); return {code:-1, output:''}; }
 });
 
-// ---------------- Config ----------------
+// ===== Config =====
 ipcMain.handle('sox:devices', async()=>({items:[], selected:recConfig.device||'default'}));
 ipcMain.handle('rec:getConfig', async()=>recConfig);
 ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
@@ -1974,7 +2200,7 @@ ipcMain.handle('rec:setConfig', async(_e,cfg)=>{
   return {ok:true, recConfig};
 });
 
-// ---------------- Chat + Doc ingest ----------------
+// ===== Chat + Doc ingest =====
 // Phase-10 unified Groq backend endpoint
 ipcMain.handle("ask", async (_e, prompt) => {
   try {
@@ -2163,20 +2389,65 @@ ipcMain.handle('webplus:set', async(_e, flag)=>{
 });
 
 // NEW: expose provider stats to the renderer for the API usage panel
-ipcMain.handle('search:stats', async () => {
+ipcMain.handle("search:stats", async () => {
   try {
-    const stats = typeof getProviderStats === 'function' ? getProviderStats() : {};
+    const stats = typeof getProviderStats === "function" ? getProviderStats() : {};
     return { ok: true, stats };
   } catch (e) {
-    send('log', `[search:stats:error] ${e.message}`);
+    send("log", `[search:stats:error] ${e.message}`);
     return { ok: false, error: e.message };
   }
 });
+// macOS Native Screen Capture Loader (safe, deduped)
+//const fs = require("fs");
+//const path = require("path");
+
+function resolveNativeAddon() {
+  const candidates = [
+    // Running from project root
+    path.resolve(process.cwd(), "native-macos-capture/build/Release/macos_capture.node"),
+
+    // Running from electron/
+    path.resolve(__dirname, "../native-macos-capture/build/Release/macos_capture.node"),
+
+    // Packaged app (resources)
+    path.resolve(process.resourcesPath || "", "native-macos-capture/build/Release/macos_capture.node")
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      debugLog("[mac-native] Using addon at:", p);
+      return p;
+    }
+  }
+
+  console.error("[mac-native] No valid addon found. Candidates:", candidates);
+  return null;
+}
+
+let macNative = null;
+
+try {
+  const addonPath = resolveNativeAddon();
+
+  if (addonPath) {
+    macNative = require(addonPath);
+    debugLog("[mac-native] addon loaded OK");
+  } else {
+    debugLog("[mac-native] addon unavailable — fallback will be used");
+  }
+} catch (err) {
+  console.error("[mac-native] preload failed:", err);
+}
+
+
 // Background screen capture (no snipping tool)
 ipcMain.handle("screenread:capture-below", async (_event, region) => {
   try {
     const target = BrowserWindow.getFocusedWindow() || win;
-    if (!target || target.isDestroyed()) return { ok: false, error: "window unavailable" };
+    if (!target || target.isDestroyed()) {
+      return { ok: false, error: "window unavailable" };
+    }
 
     const bounds = target.getBounds();
     const display = screen.getDisplayNearestPoint({
@@ -2184,7 +2455,14 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       y: bounds.y + bounds.height / 2
     });
 
+    debugLog("[screenread] display", { id: display.id, bounds: display.bounds });
+    // 🔹 Compute the region (shared across mac + fallback)
     let captureRegion = null;
+
+    // ❌ OLD (buggy) lines – keep as comments so nothing is "removed"
+    // const imgBase64 = nativeAddon.captureScreenRegion(scaled);
+    // await new Promise(r => setTimeout(r, 80));
+
     if (region && typeof region.x === "number" && region.width > 0) {
       captureRegion = {
         x: region.x,
@@ -2195,16 +2473,28 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
     } else {
       const availableBelow =
         display.bounds.y + display.bounds.height - (bounds.y + bounds.height);
-      const height = Math.max(200, Math.min(400, availableBelow > 0 ? availableBelow : 400));
+
+      const height = Math.max(
+        200,
+        Math.min(400, availableBelow > 0 ? availableBelow : 400)
+      );
+
       const regionTop = Math.min(
         display.bounds.y + display.bounds.height - height,
         Math.max(display.bounds.y, bounds.y + bounds.height)
       );
+
       const regionHeight = Math.max(
         1,
         Math.min(height, display.bounds.y + display.bounds.height - regionTop)
       );
-      const regionWidth = Math.max(1, Math.min(bounds.width, display.bounds.width));
+
+      const regionWidth = Math.max(
+  1,
+  Math.min(bounds.width, display.bounds.width)
+);
+
+
       const regionLeft = Math.max(
         display.bounds.x,
         Math.min(bounds.x, display.bounds.x + display.bounds.width - regionWidth)
@@ -2221,7 +2511,58 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
         height: regionHeight
       };
     }
+    // 🔥🔥🔥 macOS NATIVE CAPTURE (native-macos-capture)
+    if (process.platform === "darwin") {
+      debugLog("[mac-native] attempting native capture");
+      const nativeAddon = macNative; // preload at top of main.js
 
+      if (!nativeAddon || typeof nativeAddon.captureScreenRegion !== "function") {
+        console.error("[mac-native] addon missing or invalid, falling back to Electron");
+      } else {
+        try {
+          // small delay so overlay / window state settles
+          await new Promise(r => setTimeout(r, 80));
+
+          debugLog(
+            "[mac-native] addon loaded. has captureScreenRegion =",
+            typeof nativeAddon.captureScreenRegion
+          );
+
+          const scale = screen.getPrimaryDisplay().scaleFactor || 1;
+
+          // Apply generous padding before scaling (fixes clipped multi-line)
+          const pad = 30;
+          const padded = {
+            x: captureRegion.x - pad,
+            y: captureRegion.y - pad,
+            width: captureRegion.width + pad * 2,
+            height: captureRegion.height + pad * 2
+          };
+
+          const scaled = {
+            x: Math.round(padded.x * scale),
+            y: Math.round(padded.y * scale),
+            width: Math.round(padded.width * scale),
+            height: Math.round(padded.height * scale)
+          };
+
+          debugLog("[mac-native] scaled region:", scaled);
+
+          const imgBase64 = nativeAddon.captureScreenRegion(scaled);
+
+          if (imgBase64) {
+            debugLog("[mac-native] capture success");
+            const normalized = await normalizeMacImage(imgBase64);
+            return { ok: true, base64: normalized.toString("base64") };
+          } else {
+            console.error("[mac-native] addon returned empty image");
+          }
+        } catch (err) {
+          console.error("[mac-native] failed, falling back:", err);
+        }
+      }
+    }
+    // 🔹 FALLBACK (Electron desktopCapturer) — unchanged
     const displayWidth = Math.max(
       1,
       Number(display?.size?.width) || Number(display?.bounds?.width) || 1
@@ -2237,85 +2578,29 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
       height: Math.max(1, Math.floor(displayHeight * scaleFactor))
     };
 
-    console.log("[screenread] display", { id: display.id, bounds: display.bounds });
-
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
       thumbnailSize: thumbSize
     });
 
-    if (!sources.length) {
-      return { ok: false, error: "screen source missing" };
+    const screenSource =
+      sources.find(src => src.display_id === String(display.id)) || sources[0];
+
+    if (!screenSource) {
+      return { ok: false, error: "fallback capture failed: no source" };
     }
 
-    const parseDisplayId = (src) => {
-      if (!src) return null;
-      if (src.display_id) return Number(src.display_id);
-      const parts = (src.id || "").split(":");
-      return parts.length >= 2 ? Number(parts[1]) : null;
+    const fullImg = screenSource.thumbnail;
+    if (!fullImg || fullImg.isEmpty()) {
+      return { ok: false, error: "fallback capture failed: empty image" };
+    }
+
+    const cropped = fullImg.crop(captureRegion);
+    return {
+      ok: true,
+      base64: cropped.toDataURL().replace(/^data:image\/png;base64,/, "")
     };
 
-    const matched = sources.find((src) => parseDisplayId(src) === display.id);
-    const source = matched || sources[0];
-    const nativeImage = source?.thumbnail;
-    if (!nativeImage) {
-      return { ok: false, error: "thumbnail missing" };
-    }
-
-    const imageSize = nativeImage.getSize();
-    const xScale = imageSize.width / displayWidth;
-    const yScale = imageSize.height / displayHeight;
-
-    const left = Math.max(
-      0,
-      Math.min(
-        imageSize.width - 1,
-        Math.round((captureRegion.x - display.bounds.x) * xScale)
-      )
-    );
-    const top = Math.max(
-      0,
-      Math.min(
-        imageSize.height - 1,
-        Math.round((captureRegion.y - display.bounds.y) * yScale)
-      )
-    );
-    const width = Math.max(
-      1,
-      Math.min(imageSize.width - left, Math.round(captureRegion.width * xScale))
-    );
-    const heightPx = Math.max(
-      1,
-      Math.min(imageSize.height - top, Math.round(captureRegion.height * yScale))
-    );
-
-    const cropRect = { x: left, y: top, width, height: heightPx };
-    const cropped = nativeImage.crop(cropRect);
-    if (!cropped || cropped.isEmpty()) {
-      return {
-        ok: false,
-        error: "screen capture blocked (enable Screen Recording permission for Haloryn)"
-      };
-    }
-
-    const pngBuffer = cropped.toPNG();
-    if (!pngBuffer || pngBuffer.length === 0) {
-      return {
-        ok: false,
-        error: "screen capture returned empty buffer"
-      };
-    }
-
-    console.log("[screenread] captured region", {
-      left,
-      top,
-      width,
-      heightPx,
-      sourceWidth: imageSize.width,
-      sourceHeight: imageSize.height
-    });
-
-    return { ok: true, base64: pngBuffer.toString("base64") };
   } catch (err) {
     console.error("[screenread:capture-below] error", err);
     return { ok: false, error: err.message };
@@ -2323,7 +2608,9 @@ ipcMain.handle("screenread:capture-below", async (_event, region) => {
 });
 
 
-// ---------------- Window controls / env ----------------
+
+
+// ===== Window controls / env =====
 ipcMain.handle('window:minimize', ()=>{ if(win && !win.isDestroyed()) win.minimize(); });
 ipcMain.handle('window:maximize', ()=>{ if(!win||win.isDestroyed()) return; if(win.isMaximized()) win.unmaximize(); else win.maximize(); });
 ipcMain.handle("window:close", async () => {

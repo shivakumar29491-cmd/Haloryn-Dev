@@ -1,4 +1,4 @@
-// api/search/serpapi.js
+// ===== SerpAPI search handler =====
 const fetch = require("node-fetch");
 const { normalizeSearchResults } = require("../utils/formatter");
 

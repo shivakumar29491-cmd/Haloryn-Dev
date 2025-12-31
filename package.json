@@ -17,34 +17,41 @@
     "pdf-parse": "^1.1.4",
     "screenshot-desktop": "^1.15.3",
     "sharp": "^0.34.5",
-    "tesseract.js": "^2.1.4"
+    "tesseract.js": "^2.1.4",
+    "tesseract.js-core": "^2.2.0",
+    "electron-updater": "^6.3.0"
   },
   "devDependencies": {
-    "electron": "^30.0.0",
+    "electron": "^30.5.1",
     "electron-builder": "24.13.3"
   },
-
   "build": {
     "appId": "com.haloryn.app",
     "productName": "Haloryn",
     "directories": {
       "output": "dist"
     },
-
     "files": [
       "electron/**/*",
       "!**/*.map"
     ],
-      "publish": null,
-
-
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "shivakumar29491-cmd",
+        "repo": "Haloryn-Main"
+      }
+    ],
     "asar": true,
     "compression": "maximum",
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -61,7 +68,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity",

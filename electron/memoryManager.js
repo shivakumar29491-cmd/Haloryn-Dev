@@ -1,3 +1,4 @@
+// ===== Memory Manager =====
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -21,7 +22,7 @@ const defaultMemory = {
   historySummary: ""
 };
 
-// Ensure file exists
+// ===== Load memory (ensures file exists) =====
 function loadMemory() {
   try {
     if (!fs.existsSync(memFile)) {
@@ -35,6 +36,7 @@ function loadMemory() {
   }
 }
 
+// ===== Persist memory =====
 function saveMemory(mem) {
   try {
     fs.writeFileSync(memFile, JSON.stringify(mem, null, 2));

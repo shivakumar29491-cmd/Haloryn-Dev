@@ -1,23 +1,23 @@
-// =====================================================
-// Haloryn — qaEngine.js (Phase 8 Final)
-// Unified QA / Doc / Web Logic — NO LOCAL LLM
-// =====================================================
+// ===== Haloryn QA Engine (Phase 8 Final) =====
+// Unified QA / Doc / Web Logic — no local LLM
 
-const fetch = require('node-fetch');
-const { webRace } = require('./search/webRaceEngine');
-const { detectIntent } = require('./intentClassifier');
-const { extractiveSummary } = require('./textUtils');
-const { setLogger: setWebLogger } = require('./webSearchEngine');
+const fetch = require("node-fetch");
+const { webRace } = require("./search/webRaceEngine");
+const { detectIntent } = require("./intentClassifier");
+const { extractiveSummary } = require("./textUtils");
+const { setLogger: setWebLogger } = require("./webSearchEngine");
 
 let docContext = { name: "", text: "" };
 let logFn = null;
 
-// ---------------------------
-// Logger
-// ---------------------------
+// ===== Logger =====
 function log(msg) {
   if (!logFn) return;
-  try { logFn(msg); } catch {}
+  try {
+    logFn(msg);
+  } catch {
+    /* noop */
+  }
 }
 
 function init(opts = {}) {
@@ -25,9 +25,7 @@ function init(opts = {}) {
   setWebLogger(log);
 }
 
-// ---------------------------
-// State mgmt
-// ---------------------------
+// ===== State management =====
 function setDocContext(ctx) {
   docContext = {
     name: (ctx && ctx.name) || "",
@@ -35,9 +33,7 @@ function setDocContext(ctx) {
   };
 }
 
-// =====================================================
-// FAST ANSWERING (Groq)
-// =====================================================
+// ===== Fast answering (Groq) =====
 async function fastGroq(question) {
   try {
     const url = "https://api.groq.com/openai/v1/chat/completions";
@@ -62,9 +58,7 @@ async function fastGroq(question) {
   }
 }
 
-// =====================================================
-// DOC ANSWER (No Local LLM)
-// =====================================================
+// ===== Doc answer (no local LLM) =====
 async function docFirstAnswer(question) {
   if (!docContext.text) return "";
 
@@ -75,9 +69,7 @@ async function docFirstAnswer(question) {
   return ""; // fallback to web
 }
 
-// =====================================================
-// HYBRID DOC + WEB ANSWER
-// =====================================================
+// ===== Hybrid doc + web answer =====
 async function hybridDocWeb(question) {
   const docPart = await docFirstAnswer(question);
 
@@ -89,16 +81,12 @@ async function hybridDocWeb(question) {
   return combined.trim() || "I'm sorry, I couldn't find an answer.";
 }
 
-// =====================================================
-// PURE WEB ANSWER
-// =====================================================
+// ===== Pure web answer =====
 async function webOnlyAnswer(question) {
   return await webRace(question);
 }
 
-// =====================================================
-// MAIN ANSWER ROUTER (Phase 8)
-// =====================================================
+// ===== Main answer router =====
 async function answer(userText) {
   try {
     log(`[QAEngine] Received: ${userText}`);
@@ -148,10 +136,8 @@ async function answer(userText) {
   }
 }
 
-// =====================================================
 module.exports = {
   init,
   setDocContext,
   answer
 };
-

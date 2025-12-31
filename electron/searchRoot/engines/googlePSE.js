@@ -1,5 +1,4 @@
-// search/engines/googlePSE.js
-// Google Programmable Search (Custom Search) wrapper
+// ===== Google Programmable Search wrapper =====
 
 const fetch = require('node-fetch');
 
@@ -38,4 +37,3 @@ async function googlePseSearch(query, { maxResults = 5, timeoutMs = 2500 } = {})
 }
 
 module.exports = { googlePseSearch };
-

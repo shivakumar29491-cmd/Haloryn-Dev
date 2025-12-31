@@ -1,4 +1,4 @@
-
+// ===== Login page wiring =====
 import {
   loginManual,
   loginGoogle,
@@ -158,4 +158,3 @@ attachLoading(trialBtn, async () => {
     // silence redirect resolution errors
   }
 })();
-

@@ -1,5 +1,4 @@
-// braveApi.js
-// Thin wrapper around Brave Search API, returning normalized results.
+// ===== Brave API engine (searchRoot) =====
 
 const fetch = require('node-fetch');
 

@@ -3,6 +3,7 @@
   All Rights Reserved.
 */
 
+// ===== Email OTP helpers =====
 // You will paste your cloud function URL here when ready.
 const EMAIL_OTP_URL = "https://YOUR_CLOUD_FUNCTION/sendOtp";
 const EMAIL_VERIFY_URL = "https://YOUR_CLOUD_FUNCTION/verifyOtp";
